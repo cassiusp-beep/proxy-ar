@@ -1,0 +1,17 @@
+{
+  "images" : [
+    {
+      "filename" : "DockMarker.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  },
+  "properties" : {
+    "height" : 0.1,
+    "unit" : "meters",
+    "width" : 0.1
+  }
+}
