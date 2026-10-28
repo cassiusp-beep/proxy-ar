@@ -203,19 +203,32 @@ struct MissionSystem: System {
             NPCCombatSystem.shared.triggerRetaliation(from: npcEntity, in: parent)
         }
 
-        // Auto-advance sector with clean debounce and breathing room (only if not already advancing)
+        // Auto-advance sector with dramatic operational fanfare
         if GameState.shared.targetsRemaining == 0 && GameState.shared.targetsTotal > 0 && !GameState.shared.isAdvancingSector {
             GameState.shared.isAdvancingSector = true
             let sector = GameState.shared.currentSector
-            GameState.shared.tagBannerTitle = "SECTOR [\(sector)] SECURED!"
-            GameState.shared.tagBannerSubtitle = "ALL TARGETS NEUTRALIZED · NEXT DEPLOYMENT IMMINENT"
-            GameState.shared.tagBannerTimer = 3.5
 
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) {
+            // Dramatic Sector Clear Operational Fanfare
+            GameState.shared.tagBannerTitle = "★ SECTOR [\(sector)] STERILIZED ★"
+            GameState.shared.tagBannerSubtitle = "ALL HOSTILE SIGNATURES ELIMINATED · AREA SECURED"
+            GameState.shared.tagBannerTimer = 4.0
+            GameState.shared.screenFlashTimer = 0.40
+
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            AudioServicesPlaySystemSound(1025)
+
+            GameState.shared.radioMessage = "TACTICAL: Sector \(sector) neutralized. Threat level zero. Stand by for next sector vector."
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.8) {
                 advanceSector(from: npcEntity)
             }
         }
     }
+
+    // MARK: - Reusable Unit Meshes (Zero Runtime Mesh Allocations)
+    static let unitCylinderMesh: MeshResource = .generateCylinder(height: 1.0, radius: 1.0)
+    static let unitSphereMesh: MeshResource = .generateSphere(radius: 1.0)
+    static let unitDiscMesh: MeshResource = .generateCylinder(height: 0.001, radius: 1.0)
 
     @MainActor
     private static func spawnShockwave(on entity: Entity, prestige: Int) {
@@ -229,21 +242,20 @@ struct MissionSystem: System {
 
         var mat = UnlitMaterial(color: color)
         mat.blending = .transparent(opacity: 0.9)
-        let ring = ModelEntity(mesh: .generateCylinder(height: 0.0001, radius: 0.006), materials: [mat])
+        let ring = ModelEntity(mesh: unitDiscMesh, materials: [mat])
         ring.name = "shockwave"
         ring.position = [0, 0.0003, 0]
+        ring.scale = SIMD3<Float>(0.006, 1.0, 0.006)
         entity.addChild(ring)
 
-        // Animate expanding shockwave over 0.5s
-        var scale: Float = 1.0
+        // Animate expanding shockwave over 0.5s using native OpacityComponent
+        var currentScale: Float = 0.006
         var opacity: Float = 0.9
         let timer = Timer.scheduledTimer(withTimeInterval: 0.03, repeats: true) { t in
-            scale += 0.25
+            currentScale += 0.0018
             opacity = max(0, opacity - 0.065)
-            ring.scale = SIMD3<Float>(scale, 1.0, scale)
-            var fadingMat = UnlitMaterial(color: color.withAlphaComponent(CGFloat(opacity)))
-            fadingMat.blending = .transparent(opacity: .init(floatLiteral: opacity))
-            ring.model?.materials = [fadingMat]
+            ring.scale = SIMD3<Float>(currentScale, 1.0, currentScale)
+            ring.components.set(OpacityComponent(opacity: opacity))
 
             if opacity <= 0.05 {
                 t.invalidate()
@@ -287,47 +299,49 @@ struct MissionSystem: System {
         default: beamColor = UIColor(white: 1.0, alpha: 0.98) // White-Hot FLIR
         }
 
+        // Hard Tabletop Floor Clamping (never punch beneath diorama base)
+        let safeTargetPos = SIMD3<Float>(targetPos.x, max(0.0005, targetPos.y), targetPos.z)
+
+        // Trigger Swarm Panic Scatter in live ants around impact point
+        if let npcsRoot = parent.findEntity(named: "npcs") ?? parent.parent?.findEntity(named: "npcs") {
+            NPCSystem.triggerScatter(around: safeTargetPos, radius: 0.045, in: npcsRoot)
+        }
+
         // 1. Vertical Orbital Beam of Light descending straight down (0.24m tall)
         let beamHeight: Float = 0.24
-        let beamMid = targetPos + SIMD3<Float>(0, beamHeight / 2.0, 0)
+        let beamMid = safeTargetPos + SIMD3<Float>(0, beamHeight / 2.0, 0)
 
         // Outer glowing corona
         var auraMat = UnlitMaterial(color: beamColor)
         auraMat.blending = .transparent(opacity: 0.85)
-        let auraBeam = ModelEntity(
-            mesh: .generateCylinder(height: beamHeight, radius: 0.0055),
-            materials: [auraMat]
-        )
+        let auraBeam = ModelEntity(mesh: unitCylinderMesh, materials: [auraMat])
+        auraBeam.scale = SIMD3<Float>(0.0055, beamHeight, 0.0055)
         auraBeam.position = beamMid
         parent.addChild(auraBeam)
 
         // Inner white-hot laser core
         var coreMat = UnlitMaterial(color: .white)
         coreMat.blending = .transparent(opacity: 0.95)
-        let coreBeam = ModelEntity(
-            mesh: .generateCylinder(height: beamHeight, radius: 0.0022),
-            materials: [coreMat]
-        )
+        let coreBeam = ModelEntity(mesh: unitCylinderMesh, materials: [coreMat])
+        coreBeam.scale = SIMD3<Float>(0.0022, beamHeight, 0.0022)
         coreBeam.position = beamMid
         parent.addChild(coreBeam)
 
         // 2. Radiant Ground Impact Flare Disc
         var groundMat = UnlitMaterial(color: beamColor)
         groundMat.blending = .transparent(opacity: 0.95)
-        let groundFlare = ModelEntity(
-            mesh: .generateCylinder(height: 0.0002, radius: 0.016),
-            materials: [groundMat]
-        )
-        groundFlare.position = targetPos + SIMD3<Float>(0, 0.0004, 0)
+        let groundFlare = ModelEntity(mesh: unitDiscMesh, materials: [groundMat])
+        groundFlare.scale = SIMD3<Float>(0.016, 1.0, 0.016)
+        groundFlare.position = safeTargetPos + SIMD3<Float>(0, 0.0004, 0)
         parent.addChild(groundFlare)
 
-        // Animate strike ray persistence and dissolve over 0.35s
+        // Animate strike ray persistence and dissolve over 0.35s using native OpacityComponent
         var opacity: Float = 0.95
-        var groundScale: Float = 1.0
+        var currentGroundRadius: Float = 0.016
         let timer = Timer.scheduledTimer(withTimeInterval: 0.025, repeats: true) { t in
             opacity -= 0.075
-            groundScale += 0.14
-            groundFlare.scale = SIMD3<Float>(groundScale, 1.0, groundScale)
+            currentGroundRadius += 0.0025
+            groundFlare.scale = SIMD3<Float>(currentGroundRadius, 1.0, currentGroundRadius)
 
             if opacity <= 0.05 {
                 t.invalidate()
@@ -335,17 +349,9 @@ struct MissionSystem: System {
                 coreBeam.removeFromParent()
                 groundFlare.removeFromParent()
             } else {
-                var fadingAura = UnlitMaterial(color: beamColor.withAlphaComponent(CGFloat(opacity * 0.85)))
-                fadingAura.blending = .transparent(opacity: .init(floatLiteral: opacity * 0.85))
-                auraBeam.model?.materials = [fadingAura]
-
-                var fadingCore = UnlitMaterial(color: UIColor.white.withAlphaComponent(CGFloat(opacity)))
-                fadingCore.blending = .transparent(opacity: .init(floatLiteral: opacity))
-                coreBeam.model?.materials = [fadingCore]
-
-                var fadingGround = UnlitMaterial(color: beamColor.withAlphaComponent(CGFloat(opacity)))
-                fadingGround.blending = .transparent(opacity: .init(floatLiteral: opacity))
-                groundFlare.model?.materials = [fadingGround]
+                auraBeam.components.set(OpacityComponent(opacity: opacity * 0.85))
+                coreBeam.components.set(OpacityComponent(opacity: opacity))
+                groundFlare.components.set(OpacityComponent(opacity: opacity))
             }
         }
         RunLoop.main.add(timer, forMode: .common)
@@ -370,11 +376,11 @@ struct MissionSystem: System {
         let dir = diff / dist
         let mid = (start + end) * 0.5
 
-        // Generous 3.0mm thickness so the tracer is boldly visible from all AR angles
-        let mesh = MeshResource.generateCylinder(height: dist, radius: 0.0030)
+        // Generous 3.0mm thickness using pre-allocated unit cylinder mesh
         var mat = UnlitMaterial(color: color)
         mat.blending = .transparent(opacity: 0.95)
-        let tracer = ModelEntity(mesh: mesh, materials: [mat])
+        let tracer = ModelEntity(mesh: unitCylinderMesh, materials: [mat])
+        tracer.scale = SIMD3<Float>(0.0030, dist, 0.0030)
         tracer.position = mid
 
         let yAxis = SIMD3<Float>(0, 1, 0)
@@ -394,9 +400,7 @@ struct MissionSystem: System {
                 t.invalidate()
                 tracer.removeFromParent()
             } else {
-                var fading = UnlitMaterial(color: color.withAlphaComponent(CGFloat(opacity)))
-                fading.blending = .transparent(opacity: .init(floatLiteral: opacity))
-                tracer.model?.materials = [fading]
+                tracer.components.set(OpacityComponent(opacity: opacity))
             }
         }
         RunLoop.main.add(timer, forMode: .common)
@@ -404,28 +408,32 @@ struct MissionSystem: System {
 
     @MainActor
     static func spawnImpactPuff(at pos: SIMD3<Float>, in parent: Entity) {
+        let safePos = SIMD3<Float>(pos.x, max(0.0005, pos.y), pos.z)
         let prestige = GameState.shared.prestigeLevel
         let color = (prestige == 1) ? UIColor(red: 1.0, green: 0.5, blue: 0.1, alpha: 0.85) : UIColor(red: 0.2, green: 0.8, blue: 1.0, alpha: 0.85)
-        let mesh = MeshResource.generateSphere(radius: 0.005)
         var mat = UnlitMaterial(color: color)
         mat.blending = .transparent(opacity: 0.85)
-        let puff = ModelEntity(mesh: mesh, materials: [mat])
-        puff.position = pos
+        let puff = ModelEntity(mesh: unitSphereMesh, materials: [mat])
+        puff.scale = SIMD3<Float>(repeating: 0.005)
+        puff.position = safePos
         parent.addChild(puff)
 
-        var scale: Float = 1.0
+        // Trigger Swarm Panic Scatter in live ants around impact point
+        if let npcsRoot = parent.findEntity(named: "npcs") ?? parent.parent?.findEntity(named: "npcs") {
+            NPCSystem.triggerScatter(around: safePos, radius: 0.040, in: npcsRoot)
+        }
+
+        var currentRadius: Float = 0.005
         var opacity: Float = 0.85
         let timer = Timer.scheduledTimer(withTimeInterval: 0.02, repeats: true) { t in
-            scale += 0.35
+            currentRadius += 0.0018
             opacity -= 0.12
-            puff.scale = SIMD3<Float>(scale, scale, scale)
+            puff.scale = SIMD3<Float>(repeating: currentRadius)
             if opacity <= 0.05 {
                 t.invalidate()
                 puff.removeFromParent()
             } else {
-                var fading = UnlitMaterial(color: color.withAlphaComponent(CGFloat(opacity)))
-                fading.blending = .transparent(opacity: .init(floatLiteral: opacity))
-                puff.model?.materials = [fading]
+                puff.components.set(OpacityComponent(opacity: opacity))
             }
         }
         RunLoop.main.add(timer, forMode: .common)
@@ -546,8 +554,8 @@ final class NPCCombatSystem {
 
         var mat = UnlitMaterial(color: color)
         mat.blending = .transparent(opacity: 0.95)
-        let mesh = MeshResource.generateSphere(radius: 0.0035)
-        let projEntity = ModelEntity(mesh: mesh, materials: [mat])
+        let projEntity = ModelEntity(mesh: MissionSystem.unitSphereMesh, materials: [mat])
+        projEntity.scale = SIMD3<Float>(repeating: 0.0035)
         projEntity.position = start + SIMD3<Float>(0, 0.003, 0)
         parent.addChild(projEntity)
 

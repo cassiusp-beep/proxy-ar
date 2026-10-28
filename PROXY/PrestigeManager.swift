@@ -11,6 +11,7 @@ final class PrestigeManager {
     private var originalNPCMaterials: [ObjectIdentifier: [any RealityKit.Material]] = [:]
     private var cachedHaloEntities: [ObjectIdentifier: Entity] = [:]
     private var isCached = false
+    private var currentAppliedLevel: Int? = nil
 
     // Thermal Materials (FLIR White-Hot Palette)
     private let whiteHotMaterial = UnlitMaterial(color: UIColor.white)
@@ -36,6 +37,10 @@ final class PrestigeManager {
         if !isCached {
             cacheOriginals(city: city, npcs: npcs)
         }
+
+        // 60FPS Optimization: Prevent redundant recursive scene-graph material mutations
+        guard currentAppliedLevel != level else { return }
+        currentAppliedLevel = level
 
         switch level {
         case 0:

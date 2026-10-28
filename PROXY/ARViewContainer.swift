@@ -98,6 +98,7 @@ struct ARViewContainer: UIViewRepresentable {
         static let seenTwiceTimeout: TimeInterval = 1.0
         /// Cleared if the session ever rejects segmentation alongside scene reconstruction.
         private var useSegmentation = true
+        private var isProcessingFrame = false
         private var content: ContentLoader.Content?
 
         init(settings: PlacementSettings) {
@@ -486,6 +487,7 @@ struct ARViewContainer: UIViewRepresentable {
         }
 
         // Drone Gimbal Aiming System (Joystick Reticle Control)
+        @MainActor
         private func updateGimbalAim(dt: Float) {
             let input = GameInput.shared
             let gameState = GameState.shared
@@ -506,6 +508,7 @@ struct ARViewContainer: UIViewRepresentable {
             }
         }
 
+        @MainActor
         private func updateCameraTelemetry(frame: ARFrame) {
             guard anchorEntity != nil else { return }
             let dt: Float = 1.0 / 60.0
@@ -570,8 +573,13 @@ struct ARViewContainer: UIViewRepresentable {
             if !settings.isLocked {
                 tryLock()  // timeout and fallback paths
             } else {
-                updateCameraTelemetry(frame: frame)
-                Task { @MainActor in
+                // 60FPS Optimization: Drop queueing frames when main thread is busy
+                guard !isProcessingFrame else { return }
+                isProcessingFrame = true
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    defer { self.isProcessingFrame = false }
+                    self.updateCameraTelemetry(frame: frame)
                     self.updateReticle(frame: frame)
                 }
             }

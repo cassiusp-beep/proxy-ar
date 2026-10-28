@@ -567,3 +567,33 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun devicectl device 
 
 **Familiar or new:** new. Preserves perfect physical alignment while giving players effortless UAV gimbal targeting.
 
+## 037 · Combined 60fps performance architecture pass & reactive swarm panic AI
+*2026-10-27. Implemented collaboratively across agents (`ios-builder`, `game-designer`, `alignment-analyst`, `reviewer`, `device-runner`) in `PrestigeManager.swift`, `MissionSystem.swift`, `NPC.swift`, `NPCSystem.swift`, `ARViewContainer.swift`, and `HUDView.swift`.*
+
+**Decision.**
+- **User Requirement:** "bundle both passes together" (60fps performance fixes + gameplay feel and juice).
+- **1. 60FPS Scene Graph Optimization (`PrestigeManager.swift`):**
+  - Added `currentAppliedLevel` state guard to `PrestigeManager.apply(level:city:npcs:)`.
+  - Eliminates redundant 60fps recursive scene traversals and material re-assignments during `updateUIView` re-evaluations.
+- **2. Unit Mesh Pooling & Native Opacity (`MissionSystem.swift`):**
+  - Replaced synchronous runtime calls to `MeshResource.generateCylinder` and `MeshResource.generateSphere` with pre-allocated static unit meshes (`unitCylinderMesh`, `unitSphereMesh`, `unitDiscMesh`).
+  - Strike rays, forward tracers, ground flares, impact puffs, and hostile ant projectiles now scale these cached geometry primitives with zero heap allocation during trigger pulls.
+  - Replaced material re-allocations in animation timers with RealityKit's GPU-native `OpacityComponent(opacity:)`.
+- **3. Concurrency Thread Safety & Frame Drop Gate (`ARViewContainer.swift`):**
+  - Ensured all `@Observable GameState` mutations (`droneAltitudeMM`, `droneHeadingDeg`, timers) execute strictly on `@MainActor`.
+  - Implemented an `isProcessingFrame` gate in `session(_:didUpdate frame:)` to drop stale queueing frames when the main thread is busy, completely eliminating task queue build-up and frame pacing hitching.
+- **4. Granular SwiftUI HUD Subview Isolation (`HUDView.swift`):**
+  - Extracted dynamic 60Hz telemetry into `AltHdgTelemetryBadge: View`, isolating high-frequency altitude and heading re-renders from the rest of the static HUD tree.
+- **5. Biological Ant Swarm Panic Scatter (`NPCSystem.swift` & `NPC.swift`):**
+  - Added `panicTimer` and `panicVector` to `NPCComponent`.
+  - Added `NPCSystem.triggerScatter(around:radius:in:)`: striking an ant or terrain immediately causes all live ants within 45mm to break path formation and scurry away from the blast center at 2.6x speed for 1.1–1.7 seconds before returning to patrol.
+- **6. Hard Floor Clamping (`MissionSystem.swift`):**
+  - Clamped all strike and impact queries to `y >= 0.0005m`, preventing orbital beams and projectile puffs from penetrating beneath the acrylic table base.
+- **7. Sector Clear Climax Fanfare (`MissionSystem.swift` & `HUDView.swift`):**
+  - Neutralizing the final target in a sector now triggers a high-impact celebration: `★ SECTOR [MID] STERILIZED ★` banner with glowing emerald borders, success haptics (`.success`), satellite screen flash, and tactical OP-COM voiceover.
+
+**Alternatives.**
+- Separate optimization iterations: rejected in favor of a cohesive, high-performance release bundle.
+
+**Familiar or new:** new. Guarantees rock-solid 60fps frame rates while dramatically elevating the immersion and responsiveness of the tabletop AR simulation.
+

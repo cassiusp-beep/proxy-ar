@@ -33,14 +33,59 @@ struct NPCSystem: System {
 
             entity.position = [npc.position.x, npc.height, npc.position.y]
             entity.orientation = simd_quatf(angle: npc.heading, axis: [0, 1, 0])
-            if let body = entity.findEntity(named: "body") {
+            // 60FPS Optimization: direct child access instead of recursive tree search
+            if let body = entity.children.first, body.name == "body" {
                 body.position.y = abs(sin(npc.stride)) * 0.0005
             }
             entity.components.set(npc)
         }
     }
 
+    /// Triggers biological panic scatter in live ants within the blast radius of a strike
+    @MainActor
+    static func triggerScatter(around blastPos: SIMD3<Float>, radius: Float = 0.050, in npcsRoot: Entity) {
+        let blast2D = SIMD2<Float>(blastPos.x, blastPos.z)
+        for child in npcsRoot.children {
+            guard var npc = child.components[NPCComponent.self] else { continue }
+            if let target = child.components[TargetComponent.self], target.isTagged { continue }
+            let diff = npc.position - blast2D
+            let dist = simd_length(diff)
+            if dist < radius && dist > 1e-4 {
+                npc.panicTimer = Float.random(in: 1.1...1.7)
+                let fleeDir = simd_normalize(diff)
+                // Add jitter so the swarm fans out organically
+                let jitterAngle = Float.random(in: -0.5...0.5)
+                let rot = simd_quatf(angle: jitterAngle, axis: [0, 1, 0])
+                let rotatedFlee = rot.act(SIMD3<Float>(fleeDir.x, 0, fleeDir.y))
+                npc.panicVector = SIMD2<Float>(rotatedFlee.x, rotatedFlee.z)
+                child.components.set(npc)
+            }
+        }
+    }
+
     private static func advance(_ npc: inout NPCComponent, dt: Float, terrain: TerrainData) {
+        // Ant Panic Scatter Mode (scurry rapidly away from orbital blast impact)
+        if npc.panicTimer > 0 {
+            npc.panicTimer -= dt
+            let speedMultiplier: Float = 2.6
+            let step = npc.panicVector * (npc.speed * speedMultiplier) * dt
+            let nextPos = npc.position + step
+
+            // Keep within pin-block terrain footprint
+            let minX: Float = 0.008
+            let maxX: Float = PIN_FIELD_SIZE.x - 0.008
+            let minZ: Float = -PIN_FIELD_SIZE.y + 0.008
+            let maxZ: Float = -0.008
+
+            if nextPos.x >= minX && nextPos.x <= maxX && nextPos.y >= minZ && nextPos.y <= maxZ {
+                npc.position = nextPos
+            } else {
+                // Reverse panic direction upon wall contact
+                npc.panicVector = -npc.panicVector
+            }
+            return
+        }
+
         switch npc.activity {
         case let .walking(index, forward, distance):
             let path = terrain.paths[index]

@@ -206,33 +206,11 @@ struct HUDView: View {
 
     private var leftTelemetry: some View {
         VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 6) {
-                Rectangle()
-                    .fill(primaryColor)
-                    .frame(width: 2, height: 26)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 4) {
-                        Text("ALT")
-                            .font(.system(size: 7, weight: .bold, design: .monospaced))
-                            .foregroundStyle(primaryColor.opacity(0.8))
-                        Text(String(format: "%.0fMM", gameState.droneAltitudeMM))
-                            .font(.system(size: 11, weight: .black, design: .monospaced))
-                            .foregroundStyle(.white)
-                    }
-                    HStack(spacing: 4) {
-                        Text("HDG")
-                            .font(.system(size: 7, weight: .bold, design: .monospaced))
-                            .foregroundStyle(primaryColor.opacity(0.8))
-                        Text(headingWithCardinal(gameState.droneHeadingDeg))
-                            .font(.system(size: 10, weight: .bold, design: .monospaced))
-                            .foregroundStyle(.white.opacity(0.9))
-                    }
-                }
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .background(smokedGlassBacking(cornerRadius: 6))
+            AltHdgTelemetryBadge(
+                altitudeMM: gameState.droneAltitudeMM,
+                headingDeg: gameState.droneHeadingDeg,
+                primaryColor: primaryColor
+            )
 
             // Gimbal Slew Reticle Status (Active when joysticks used to aim)
             if gameState.isGimbalAimActive {
@@ -519,30 +497,39 @@ struct HUDView: View {
         }
     }
 
-    // Tactical Tag/Neutralization Banner
+    // Tactical Tag/Neutralization Banner (with Sector Sterilized Climax Fanfare)
     private var tagConfirmationBanner: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "target")
-                .foregroundStyle(accentColor)
-                .font(.system(size: 14, weight: .black))
+        let isSectorClear = gameState.tagBannerTitle.contains("STERILIZED")
+        let bannerColor = isSectorClear ? Color(red: 0.20, green: 0.95, blue: 0.40) : accentColor
+
+        return HStack(spacing: 8) {
+            Image(systemName: isSectorClear ? "star.fill" : "target")
+                .foregroundStyle(bannerColor)
+                .font(.system(size: isSectorClear ? 16 : 14, weight: .black))
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(gameState.tagBannerTitle.uppercased())
-                    .font(.system(size: 11, weight: .black, design: .monospaced))
+                    .font(.system(size: isSectorClear ? 13 : 11, weight: .black, design: .monospaced))
                     .foregroundStyle(.white)
                 Text(gameState.tagBannerSubtitle.uppercased())
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .foregroundStyle(accentColor)
+                    .font(.system(size: isSectorClear ? 10 : 9, weight: .heavy, design: .monospaced))
+                    .foregroundStyle(bannerColor)
+            }
+
+            if isSectorClear {
+                Image(systemName: "star.fill")
+                    .foregroundStyle(bannerColor)
+                    .font(.system(size: 16, weight: .black))
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 7)
-        .background(smokedGlassBacking(cornerRadius: 6))
+        .padding(.horizontal, isSectorClear ? 18 : 14)
+        .padding(.vertical, isSectorClear ? 10 : 7)
+        .background(smokedGlassBacking(cornerRadius: 8))
         .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .stroke(accentColor, lineWidth: 1)
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(bannerColor, lineWidth: isSectorClear ? 1.75 : 1.0)
         )
-        .shadow(color: accentColor.opacity(0.5), radius: 10)
+        .shadow(color: bannerColor.opacity(isSectorClear ? 0.75 : 0.45), radius: isSectorClear ? 16 : 8)
     }
 
     // Hostile Retaliation Warning Banner
@@ -962,5 +949,58 @@ struct CurvedScreenBezelView: View {
                 .position(x: w / 2, y: pad + 14)
             }
         }
+    }
+}
+
+// MARK: - Granular Isolated Subview: Altitude & Heading Badge (Prevents Full-HUD Re-renders)
+
+struct AltHdgTelemetryBadge: View {
+    let altitudeMM: Float
+    let headingDeg: Float
+    let primaryColor: Color
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Rectangle()
+                .fill(primaryColor)
+                .frame(width: 2, height: 26)
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 4) {
+                    Text("ALT")
+                        .font(.system(size: 7, weight: .bold, design: .monospaced))
+                        .foregroundStyle(primaryColor.opacity(0.8))
+                    Text(String(format: "%.0fMM", altitudeMM))
+                        .font(.system(size: 11, weight: .black, design: .monospaced))
+                        .foregroundStyle(.white)
+                }
+                HStack(spacing: 4) {
+                    Text("HDG")
+                        .font(.system(size: 7, weight: .bold, design: .monospaced))
+                        .foregroundStyle(primaryColor.opacity(0.8))
+                    Text(headingWithCardinal(headingDeg))
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.9))
+                }
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(Color(red: 0.04, green: 0.06, blue: 0.08).opacity(0.78))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 0.75)
+                )
+        )
+    }
+
+    private func headingWithCardinal(_ deg: Float) -> String {
+        let normalized = Int(deg) % 360
+        let cardinals = ["N", "NE", "E", "SE", "S", "SW", "W", "NW", "N"]
+        let index = Int((Double(normalized) + 22.5) / 45.0)
+        let cardinal = cardinals[index % 8]
+        return String(format: "%03d° %@", normalized, cardinal)
     }
 }

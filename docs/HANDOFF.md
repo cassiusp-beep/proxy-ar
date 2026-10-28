@@ -43,13 +43,14 @@ For the next session's orchestrator. Read this first, then `CLAUDE.md`, then `do
   - **Native UIKit Scaling**: In `ARViewContainer.updateUIView`, animated `arView.transform = CGAffineTransform(scaleX: targetScale, y: targetScale)` directly via `UIView.animate` to ensure RealityKit's Metal layer physically magnifies from the center crosshair at 1.0X -> 2.0X -> 4.0X.
   - **Optical Aim Assist**: Corrected `screenDist = unzoomed` (eliminating the zoom inversion penalty where distant ants were pushed out of lock range). Expanded lock cone (`100pt` / `45mm`) and accelerated electronic lock-on time to `0.35s` (2.3x faster) in optical zoom.
   - **Precision Strike Bonus**: Striking while zoomed in awards `+25` score and displays `★ OPTICAL PRECISION HIT +25 ★`.
-  - **Fly-By-Wire Joystick Drone Flight (DECISION 036)**: Added full dual-stick virtual drone navigation for seated or mobility-constrained play without relying solely on physical phone craning:
-  - **Left Thumbstick:** Fly Forward/Backward & Strafe Left/Right (`0.22 m/s`).
-  - **Right Thumbstick:** Gimbal Yaw Pan (`55°/s`) & Altitude Climb/Dive (`0.15 m/s`).
-  - **Re-Centering:** Click Left Stick (`L3`), tap D-Pad Left, or tap the on-screen `RE-CENTER` pill to snap back to the physical marker origin.
-  - **Seamless Additive Gyro:** Physical phone movement and joystick flight work simultaneously in 60fps harmony.
-  - **Touchscreen Sticks:** Automatically displays on-screen virtual thumbsticks if no physical controller is attached.
-  - **HUD Integration:** Shows active fly-by-wire telemetry (`[ FBW // 28CM ]`) and dynamically updates altitude and compass heading as the drone flies.
+  - **Drone Gimbal Aiming System (DECISION 036)**: Left Stick on Backbone One (or on-screen `GIMBAL SLEW` thumbstick) smoothly slews targeting crosshairs across screen space without displacing the physical AR diorama. Includes L3 / D-Pad Left instant boresight re-centering.
+  - **60FPS Architecture Pass & Reactive Swarm Panic AI (DECISION 037)**:
+    - **Zero-Allocation Geometry**: Shared static unit meshes (`unitCylinderMesh`, `unitSphereMesh`, `unitDiscMesh`) for strike rays, tracers, impacts, and projectiles.
+    - **Scene Graph Caching**: `PrestigeManager.apply` guarded with `currentAppliedLevel` check, eliminating 60fps recursive material reassignment.
+    - **Frame Drop Gate**: RealityKit render loop throttled with `isProcessingFrame` gate on `@MainActor`, eliminating task queuing and stutter.
+    - **Sub-View Isolation**: Dynamic altitude and heading readouts isolated in `AltHdgTelemetryBadge: View`.
+    - **Reactive Swarm Panic AI**: Live ants within 45mm of orbital strikes break formation and scurry away from blast centers in organic panic for 1.1–1.7s at 2.6x speed.
+    - **Sector Clear Fanfare**: Sector sterilization celebrated with `★ SECTOR [MID] STERILIZED ★` emerald banner, success haptics, satellite screen flash, and OP-COM radio callout.
 - **Audio Ambience**: Procedural synthetic quadcopter rotor hum (~85 Hz fundamental with harmonics) generated via `AVAudioSourceNode` without external asset dependencies.
 - **Snapshots & Logs**: Automatically saved to `Documents/Snapshots/` and `Documents/Logs/` inside app container and pulled via `devicectl`.
 

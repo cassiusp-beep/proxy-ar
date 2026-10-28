@@ -17,6 +17,8 @@ struct NPCComponent: Component {
     var speed: Float                    // m/s
     var heading: Float = 0              // radians around +Y
     var stride: Float = 0               // walk-cycle phase
+    var panicTimer: Float = 0           // When > 0, rapid scatter flee state
+    var panicVector: SIMD2<Float> = .zero
 }
 
 enum NPCFactory {
