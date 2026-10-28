@@ -597,3 +597,47 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun devicectl device 
 
 **Familiar or new:** new. Guarantees rock-solid 60fps frame rates while dramatically elevating the immersion and responsiveness of the tabletop AR simulation.
 
+## 038 · Synthetic surveillance sensor crop, dramatic connection lost sequence, supercharged swarm panic scatter, and universal multi-tier retaliation
+*2026-10-27. Identified through on-device live testing with the user; implemented collaboratively across the specialist council (`game-designer`, `ios-builder`, `reviewer`, `device-runner`, `documenter`) in `GameState.swift`, `MissionSystem.swift`, `NPCSystem.swift`, `HUDView.swift`, `GameInput.swift`, and `ARViewContainer.swift`.*
+
+**Decision.**
+- **User Feedback Analysis:**
+  1. Tabletop lock: confirmed working! Diorama is rock-solid.
+  2. Ant scatter: "no" (too subtle, radius too tight, speed too slow to notice from handset distance).
+  3. Optical zoom: "I don't like it, just make it more artificial than trying to rely on the actual cameras."
+  4. Drone shield depletion: "yes, but if I hit zero it should say lost connection."
+  5. Retaliation: "everybody, on each level should have a chance to fight back."
+- **1. Artificial Synthetic Sensor Crop Mode (`HUDView.swift` & `ARViewContainer.swift`):**
+  - Completely removed UIKit `arView.transform` camera scaling. The physical video feed and 3D diorama remain 100% natural, crisp, non-distorted, and perfectly anchored at 1.0x with zero parallax warping.
+  - Replaced camera scaling with an artificial Mil-Tech Digital Surveillance Crop overlay:
+    - Central digital sensor crop box (420×240pt at 2.0X, 320×180pt at 4.0X) styled with dashed boundary rulers and fine CRT scanlines.
+    - Technical reconnaissance readouts: `[ SYNTHETIC SENSOR CROP: 2.0X / 4.0X ]`, `DIGI-FOV: 14° // SENSOR MATRIX: 4096×2160 // GAIN: +12dB`.
+    - Crosshair badge updated to `2.0X SENSOR CROP` and `4.0X DIGI-ZOOM`.
+- **2. Full-Screen Lost Connection / Telemetry Dropout Overlay (`HUDView.swift` & `GameState.swift`):**
+  - When `droneShield` reaches 0%:
+    - Immediately triggers `isConnectionLost = true`, locking out weapon firing, tool selection, and controller flight inputs.
+    - Displays full-screen CRT static breakdown with flashing crimson emergency beacon, warning stripes, and alert card:
+      `[ ⚠ LOST CONNECTION // SIGNAL COLLAPSED ⚠ ]`
+      `UAV-01 SENSOR TELEMETRY COLLAPSED // HULL INTEGRITY 0%`
+      `HOSTILE COUNTER-FIRE SEVERED CARRIER SIGNAL`
+      `RE-ESTABLISHING AUXILIARY LINK (3.8s)...`
+    - Plays critical alarm buzz (`AudioServicesPlaySystemSound(1053)`) and heavy error haptics.
+    - After 3.8s, auxiliary power reconnects: shield recovers to 50%, controls unlock, and reconnect chime (`1025`) plays.
+- **3. Supercharged Swarm Panic Scatter (`NPCSystem.swift` & `MissionSystem.swift`):**
+  - Expanded blast panic radius from 45mm to **110mm** (covers almost the entire diorama footprint).
+  - Increased panic sprint speed from 2.6x to **7.5x** with erratic zig-zag path deviation every 0.25s.
+  - Panic timer expanded to **2.4–3.6s**.
+  - Added frenetic visual thrash animation: rapid heading wobble (`sin(timer * 28) * 0.45`), rapid stride thrashing (`stride += dt * 36`), and vertical scurry bounce (`renderPos.y += sin(timer * 42) * 0.0018`).
+  - Edge fallback: if fewer than 2 NPCs are within the blast radius, the 3 closest live NPCs anywhere on the model scatter automatically.
+- **4. Universal Multi-Tier Retaliation (`MissionSystem.swift`):**
+  - Removed prestige restriction (`prestigeLevel >= 1`). Every single level now actively fights back!
+  - **Level 0 (Citadel / Citizens / Toy Drone):** Citizens resist with Neon Hot Pink cork missiles and party poppers (`1054`), shouting `"⚠ CITIZEN RESISTANCE // POPPING CORKS"`. Drops shield 10%.
+  - **Level 1 (Bio-Swarm / Ant Infestation):** Ants spit Toxic Lime-Green bio-acid (`1521`), warning `"⚠ BIO-ACID SPIT // CORROSIVE VOLLEY"`. Drops shield 15%.
+  - **Level 2 (Synapse Tactical / Covert Insurgency):** Hostiles fire Incandescent 7.62mm AK tracer rounds (`1052`), warning `"⚠ SMALL ARMS TRACER // HOSTILE FIRE"`. Drops shield 15%.
+  - **Level 3 (Silent Dawn / FLIR Thermal):** White-hot infrared surface-to-air MANPADS missiles (`1073`), warning `"⚠ SAM LAUNCH // INFRARED MISSILE LOCK"`. Drops shield 20%.
+  - Immediate Retaliation: Striking any NPC causes up to 2 nearby live NPCs within 120mm to return fire after a 0.20–0.38s reaction time.
+  - Ambient Retaliation: Every 3.5–5.5s, an active hostile on the terrain launches counter-fire at the drone camera.
+
+**Familiar or new:** new. Delivers the raw tactical tension, distinct retro-military aesthetic, and authentic two-way combat requested by the user.
+
+

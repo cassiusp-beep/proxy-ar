@@ -27,12 +27,9 @@ struct ARViewContainer: UIViewRepresentable {
         // Reading these here registers them with Observation
         _ = GameState.shared.prestigeLevel
 
-        // Hardware-accelerated optical zoom scaling directly on ARView
-        let targetScale = CGFloat(zoomFactor)
-        if abs(arView.transform.a - targetScale) > 0.01 {
-            UIView.animate(withDuration: 0.28, delay: 0, options: [.curveEaseOut, .beginFromCurrentState]) {
-                arView.transform = CGAffineTransform(scaleX: targetScale, y: targetScale)
-            }
+        // Pure natural ARView feed: no artificial camera warping/stretching
+        if arView.transform != .identity {
+            arView.transform = .identity
         }
 
         context.coordinator.offsetEntity.transform = settings.transform

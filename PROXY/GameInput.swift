@@ -85,12 +85,21 @@ final class GameInput {
         // Left Stick: Horizontal drone flight (Pitch forward/back, Roll strafe left/right)
         gamepad.leftThumbstick.valueChangedHandler = { [weak self] _, x, y in
             guard let self, self.isControllerConnected else { return }
+            if GameState.shared.isConnectionLost {
+                self.moveVector = .zero
+                return
+            }
             self.moveVector = SIMD2<Float>(x, y)
         }
 
         // Right Stick: Gimbal Yaw (pan left/right) and Altitude (climb up / dive down)
         gamepad.rightThumbstick.valueChangedHandler = { [weak self] _, x, y in
             guard let self, self.isControllerConnected else { return }
+            if GameState.shared.isConnectionLost {
+                self.yawInput = 0
+                self.altitudeInput = 0
+                return
+            }
             self.yawInput = x
             self.altitudeInput = y
         }
@@ -98,6 +107,7 @@ final class GameInput {
         // Left Thumbstick Click (L3): Re-center reticle back to center boresight
         gamepad.leftThumbstickButton?.pressedChangedHandler = { [weak self] _, _, pressed in
             if pressed {
+                guard !GameState.shared.isConnectionLost else { return }
                 SessionLogger.shared.log("Controller L3 (Left Stick Click): Re-center targeting reticle", category: "INPUT")
                 Task { @MainActor in
                     GameState.shared.resetGimbal()
@@ -105,9 +115,10 @@ final class GameInput {
             }
         }
 
-        // Right Thumbstick Click (R3): Cycle Optical Zoom (1X -> 2X -> 4X)
+        // Right Thumbstick Click (R3): Cycle Zoom (1X -> 2X -> 4X)
         gamepad.rightThumbstickButton?.pressedChangedHandler = { [weak self] _, _, pressed in
             if pressed {
+                guard !GameState.shared.isConnectionLost else { return }
                 SessionLogger.shared.log("Controller R3 (Right Stick Click): cycle zoom", category: "INPUT")
                 Task { @MainActor in
                     GameState.shared.cycleZoom()
@@ -118,6 +129,7 @@ final class GameInput {
         // Right Trigger [R2]: Cycle Zoom (1X -> 2X -> 4X)
         gamepad.rightTrigger.pressedChangedHandler = { [weak self] _, _, pressed in
             if pressed {
+                guard !GameState.shared.isConnectionLost else { return }
                 SessionLogger.shared.log("Controller R2 / Right Trigger pressed: cycle zoom", category: "INPUT")
                 Task { @MainActor in
                     GameState.shared.cycleZoom()
@@ -128,6 +140,7 @@ final class GameInput {
         // L2 Trigger [L2]: Trigger Scan tool
         gamepad.leftTrigger.pressedChangedHandler = { [weak self] _, _, pressed in
             if pressed {
+                guard !GameState.shared.isConnectionLost else { return }
                 SessionLogger.shared.log("Controller L2 / Left Trigger pressed: select scan tool", category: "INPUT")
                 Task { @MainActor in
                     GameState.shared.selectedToolIndex = GameState.ToolSlot.scan.rawValue
@@ -138,6 +151,7 @@ final class GameInput {
         // Cross [✕] and Square [□] buttons: Attack / Tag action
         gamepad.buttonA.pressedChangedHandler = { [weak self] _, _, pressed in
             if pressed {
+                guard !GameState.shared.isConnectionLost else { return }
                 SessionLogger.shared.log("Controller ✕ (Button A) pressed: TAG/STRIKE triggered", category: "INPUT")
                 self?.tagTriggered = true
                 Task { @MainActor in
@@ -148,6 +162,7 @@ final class GameInput {
 
         gamepad.buttonX.pressedChangedHandler = { [weak self] _, _, pressed in
             if pressed {
+                guard !GameState.shared.isConnectionLost else { return }
                 SessionLogger.shared.log("Controller □ (Button X) pressed: TAG/STRIKE triggered", category: "INPUT")
                 self?.tagTriggered = true
                 Task { @MainActor in
@@ -159,6 +174,7 @@ final class GameInput {
         // Circle [○] button: Cycle zoom
         gamepad.buttonB.pressedChangedHandler = { [weak self] _, _, pressed in
             if pressed {
+                guard !GameState.shared.isConnectionLost else { return }
                 SessionLogger.shared.log("Controller ○ (Button B) pressed: cycle zoom", category: "INPUT")
                 Task { @MainActor in
                     GameState.shared.cycleZoom()

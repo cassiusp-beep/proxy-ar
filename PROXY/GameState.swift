@@ -32,14 +32,14 @@ final class GameState {
         UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
 
         if zoomFactor > 3.5 {
-            radioMessage = "OPERATOR: Optical 4.0X telephoto active. Precision lock ready."
+            radioMessage = "OPERATOR: Synthetic Aperture 4.0X engaged. Sensor crop active."
         } else if zoomFactor > 1.5 {
-            radioMessage = "OPERATOR: Optical 2.0X engaged. Telemetry synced."
+            radioMessage = "OPERATOR: Digital Sensor Crop 2.0X active. Precision grid synced."
         } else {
-            radioMessage = "OPERATOR: Wide field 1.0X restored."
+            radioMessage = "OPERATOR: Wide-field 1.0X reconnaissance restored."
         }
 
-        SessionLogger.shared.log("OPTICAL ZOOM: switched magnification to \(zoomFactor)X", category: "OPTICS")
+        SessionLogger.shared.log("SYNTHETIC SENSOR ZOOM: switched magnification to \(zoomFactor)X", category: "OPTICS")
     }
 
     // MARK: - Drone Gimbal Aiming (Joystick Reticle Control)
@@ -121,22 +121,37 @@ final class GameState {
 
     // MARK: - Drone Combat & Counter-Attack Defense
     var droneShield: Float = 100.0       // 0...100% Shield / Hull Integrity
+    var isConnectionLost: Bool = false   // True when shield hits 0% (Lost connection lockout)
+    var connectionLostCountdown: Float = 0.0
     var hostileWarningTimer: Float = 0.0 // Flashes warning when NPCs launch counter-attack
     var droneDamageFlashTimer: Float = 0.0 // Screen glitch/acid flash when drone is hit by NPC
     var hostileWarningText: String = "THREAT // INCOMING HOSTILE FIRE"
 
     func damageDrone(amount: Float) {
+        guard !isConnectionLost else { return }
         droneShield = max(0, droneShield - amount)
         droneDamageFlashTimer = 0.35
         hostileWarningText = "HULL IMPACT // SHIELD \(Int(droneShield))%"
         hostileWarningTimer = 1.5
 
-        if droneShield == 0 {
-            // Emergency shield recharge sequence
-            radioMessage = "OPERATOR: Drone shield compromised! Initiating emergency circuit cycle."
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
-                self?.droneShield = 50.0
-                self?.radioMessage = "OPERATOR: Emergency shield auxiliary online [50%]."
+        if droneShield <= 0 {
+            droneShield = 0
+            isConnectionLost = true
+            connectionLostCountdown = 3.8
+            radioMessage = "OPERATOR: ⚠ HULL BREACH // LOST CONNECTION TO DRONE ⚠"
+            AudioServicesPlaySystemSound(1053) // Critical alarm buzz
+            UINotificationFeedbackGenerator().notificationOccurred(.error)
+            SessionLogger.shared.log("CRITICAL: Drone shield depleted to 0% — LOST CONNECTION", category: "COMBAT")
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.8) { [weak self] in
+                guard let self else { return }
+                self.droneShield = 50.0
+                self.isConnectionLost = false
+                self.connectionLostCountdown = 0.0
+                self.radioMessage = "OPERATOR: Uplink re-established! Auxiliary power online [50%]."
+                AudioServicesPlaySystemSound(1025) // Reconnect chime
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                SessionLogger.shared.log("RECOVERY: Drone connection re-established, shield at 50%", category: "COMBAT")
             }
         }
     }
@@ -150,7 +165,7 @@ final class GameState {
 
     /// Attempts to discharge one round of ammunition. Returns true if round was fired.
     func fireWeapon() -> Bool {
-        if isReloading {
+        if isConnectionLost || isReloading {
             return false
         }
         if ammo <= 0 {

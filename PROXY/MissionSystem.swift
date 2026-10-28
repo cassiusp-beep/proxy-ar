@@ -304,7 +304,7 @@ struct MissionSystem: System {
 
         // Trigger Swarm Panic Scatter in live ants around impact point
         if let npcsRoot = parent.findEntity(named: "npcs") ?? parent.parent?.findEntity(named: "npcs") {
-            NPCSystem.triggerScatter(around: safeTargetPos, radius: 0.045, in: npcsRoot)
+            NPCSystem.triggerScatter(around: safeTargetPos, radius: 0.110, in: npcsRoot)
         }
 
         // 1. Vertical Orbital Beam of Light descending straight down (0.24m tall)
@@ -420,7 +420,7 @@ struct MissionSystem: System {
 
         // Trigger Swarm Panic Scatter in live ants around impact point
         if let npcsRoot = parent.findEntity(named: "npcs") ?? parent.parent?.findEntity(named: "npcs") {
-            NPCSystem.triggerScatter(around: safePos, radius: 0.040, in: npcsRoot)
+            NPCSystem.triggerScatter(around: safePos, radius: 0.110, in: npcsRoot)
         }
 
         var currentRadius: Float = 0.005
@@ -462,9 +462,9 @@ final class NPCCombatSystem {
     func update(dronePos: SIMD3<Float>, npcsRoot: Entity, dt: Float) {
         ambientRetaliationTimer -= dt
         if ambientRetaliationTimer <= 0 {
-            ambientRetaliationTimer = Float.random(in: 4.0...6.5)
-            // In Prestige >= 1, active hostiles launch periodic counter-attacks
-            if GameState.shared.prestigeLevel >= 1 && GameState.shared.targetsRemaining > 0 {
+            ambientRetaliationTimer = Float.random(in: 3.5...5.5)
+            // On ALL levels, active hostiles/citizens launch periodic counter-attacks while targets remain
+            if GameState.shared.targetsRemaining > 0 && !GameState.shared.isConnectionLost {
                 launchHostileCounterFire(dronePos: dronePos, npcsRoot: npcsRoot)
             }
         }
@@ -480,12 +480,22 @@ final class NPCCombatSystem {
             if distToDrone < 0.045 {
                 // Direct Hit on Drone!
                 proj.entity.removeFromParent()
-                GameState.shared.damageDrone(amount: 15.0)
+                let prestige = GameState.shared.prestigeLevel
+                let damageAmount: Float = prestige == 0 ? 10.0 : (prestige == 3 ? 20.0 : 15.0)
+                GameState.shared.damageDrone(amount: damageAmount)
 
                 // Impact Haptics & Audio
                 UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
-                AudioServicesPlaySystemSound(1521) // Impact audio
-                SessionLogger.shared.log("HOSTILE HIT: counter-fire impacted drone! Shield at \(Int(GameState.shared.droneShield))%", category: "COMBAT")
+                if prestige == 0 {
+                    AudioServicesPlaySystemSound(1054) // Cork pop / toy hit
+                } else if prestige == 2 {
+                    AudioServicesPlaySystemSound(1052) // Ricochet
+                } else if prestige == 3 {
+                    AudioServicesPlaySystemSound(1073) // Heavy detonation
+                } else {
+                    AudioServicesPlaySystemSound(1521) // Acid impact
+                }
+                SessionLogger.shared.log("HOSTILE HIT: [P\(prestige)] counter-fire impacted drone! Shield at \(Int(GameState.shared.droneShield))%", category: "COMBAT")
                 continue
             }
 
@@ -499,48 +509,71 @@ final class NPCCombatSystem {
         activeProjectiles = remaining
     }
 
-    /// Retaliation triggered immediately when a fellow ant or target is struck
+    /// Retaliation triggered immediately when a fellow ant or citizen is struck on ANY level
     func triggerRetaliation(from struckEntity: Entity, in npcsRoot: Entity, toward targetDronePos: SIMD3<Float>? = nil) {
-        guard GameState.shared.prestigeLevel >= 1 else { return }
+        guard !GameState.shared.isConnectionLost else { return }
 
-        // Find nearest live, un-tagged ant to retaliate
+        // Find nearest live, un-tagged NPCs to retaliate
         let struckPos = struckEntity.position(relativeTo: npcsRoot)
-        let liveAnts = npcsRoot.children.filter {
+        let liveNPCs = npcsRoot.children.filter {
             guard $0.components.has(NPCComponent.self) else { return false }
             let isTagged = $0.components[TargetComponent.self]?.isTagged ?? false
             return !isTagged && $0 != struckEntity
         }
 
-        guard let retaliator = liveAnts.min(by: {
+        let sorted = liveNPCs.sorted {
             simd_length($0.position(relativeTo: npcsRoot) - struckPos) < simd_length($1.position(relativeTo: npcsRoot) - struckPos)
-        }) else { return }
+        }
 
-        // Retaliate after short 0.25s telegraph reaction time
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-            guard let self, let parent = retaliator.parent else { return }
-            let antPos = retaliator.position(relativeTo: parent)
-            let destPos = targetDronePos ?? (antPos + SIMD3<Float>(0, 0.08, 0))
-            self.fireHostileProjectile(from: antPos, toward: destPos, in: parent)
+        // Take up to 2 nearby retaliators within 120mm
+        let retaliators = sorted.prefix(2)
+        guard !retaliators.isEmpty else { return }
+
+        // Retaliate after short telegraph reaction time (0.2s - 0.4s)
+        for (idx, retaliator) in retaliators.enumerated() {
+            let delay = 0.20 + Double(idx) * 0.18
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self, let parent = retaliator.parent else { return }
+                let shooterPos = retaliator.position(relativeTo: parent)
+                let destPos = targetDronePos ?? (shooterPos + SIMD3<Float>(0, 0.08, 0))
+                self.fireHostileProjectile(from: shooterPos, toward: destPos, in: parent)
+            }
         }
     }
 
     private func launchHostileCounterFire(dronePos: SIMD3<Float>, npcsRoot: Entity) {
-        let liveAnts = npcsRoot.children.filter {
+        let liveNPCs = npcsRoot.children.filter {
             guard $0.components.has(NPCComponent.self) else { return false }
             return !($0.components[TargetComponent.self]?.isTagged ?? false)
         }
-        guard let shooter = liveAnts.randomElement(), let parent = shooter.parent else { return }
-        let antPos = shooter.position(relativeTo: parent)
-        fireHostileProjectile(from: antPos, toward: dronePos, in: parent)
+        guard let shooter = liveNPCs.randomElement(), let parent = shooter.parent else { return }
+        let shooterPos = shooter.position(relativeTo: parent)
+        fireHostileProjectile(from: shooterPos, toward: dronePos, in: parent)
     }
 
     private func fireHostileProjectile(from start: SIMD3<Float>, toward target: SIMD3<Float>, in parent: Entity) {
         let prestige = GameState.shared.prestigeLevel
         let color: UIColor
+        let warningText: String
+        let projScale: Float
+
         switch prestige {
-        case 1: color = UIColor(red: 0.85, green: 1.0, blue: 0.1, alpha: 0.95) // Toxic Bio-Acid Spit
-        case 2: color = UIColor(red: 1.0, green: 0.2, blue: 0.2, alpha: 0.95)  // Red Anti-Air Rocket
-        default: color = UIColor(white: 1.0, alpha: 0.95)                       // EMP White Dart
+        case 0:
+            color = UIColor(red: 1.0, green: 0.18, blue: 0.65, alpha: 0.95) // Neon Hot Pink Cork Missile
+            warningText = "⚠ CITIZEN RESISTANCE // POPPING CORKS"
+            projScale = 0.0042
+        case 1:
+            color = UIColor(red: 0.75, green: 1.0, blue: 0.05, alpha: 0.95) // Toxic Bio-Acid Spit
+            warningText = "⚠ BIO-ACID SPIT // CORROSIVE VOLLEY"
+            projScale = 0.0038
+        case 2:
+            color = UIColor(red: 1.0, green: 0.35, blue: 0.05, alpha: 0.95)  // Incandescent 7.62 Tracer
+            warningText = "⚠ SMALL ARMS TRACER // HOSTILE FIRE"
+            projScale = 0.0030
+        default:
+            color = UIColor(white: 1.0, alpha: 0.98)                       // White-Hot SAM Missile
+            warningText = "⚠ SAM LAUNCH // INFRARED MISSILE LOCK"
+            projScale = 0.0045
         }
 
         let dir = target - start
@@ -548,14 +581,14 @@ final class NPCCombatSystem {
         guard dist > 0.02 else { return }
         let normDir = dir / dist
 
-        // Projectile speed (~0.28 m/s: travels across diorama in ~0.8s, giving player time to react)
-        let speed: Float = 0.28
+        // Projectile speed (~0.30 m/s: travels across diorama in ~0.7s, giving player time to react)
+        let speed: Float = 0.30
         let velocity = normDir * speed
 
         var mat = UnlitMaterial(color: color)
         mat.blending = .transparent(opacity: 0.95)
         let projEntity = ModelEntity(mesh: MissionSystem.unitSphereMesh, materials: [mat])
-        projEntity.scale = SIMD3<Float>(repeating: 0.0035)
+        projEntity.scale = SIMD3<Float>(repeating: projScale)
         projEntity.position = start + SIMD3<Float>(0, 0.003, 0)
         parent.addChild(projEntity)
 
@@ -567,8 +600,8 @@ final class NPCCombatSystem {
         ))
 
         // HUD Alert
-        GameState.shared.hostileWarningTimer = 1.2
-        GameState.shared.hostileWarningText = "⚠ THREAT DETECTED // INCOMING COUNTER-FIRE"
-        SessionLogger.shared.log("HOSTILE FIRED: projectile launched from ant at \(start) toward drone", category: "COMBAT")
+        GameState.shared.hostileWarningTimer = 1.3
+        GameState.shared.hostileWarningText = warningText
+        SessionLogger.shared.log("HOSTILE FIRED: [P\(prestige)] projectile launched from NPC at \(start) toward drone", category: "COMBAT")
     }
 }

@@ -29,47 +29,94 @@ struct NPCSystem: System {
                 npc.heading = atan2(moved.x, moved.y)  // model faces +Z
                 npc.stride += simd_length(moved) / 0.0012 * .pi
             }
+            if npc.panicTimer > 0 {
+                // Dramatic visual thrash: fast heading shake & rapid stride
+                npc.stride += dt * 36.0
+                npc.heading += sin(npc.panicTimer * 28.0) * 0.45
+            }
             npc.height += (terrain.height(at: npc.position) - npc.height) * min(1, dt * 12)
 
-            entity.position = [npc.position.x, npc.height, npc.position.y]
+            var renderPos: SIMD3<Float> = [npc.position.x, npc.height, npc.position.y]
+            if npc.panicTimer > 0 {
+                // Frenetic vertical scurry bounce
+                renderPos.y += abs(sin(npc.panicTimer * 42.0)) * 0.0018
+            }
+            entity.position = renderPos
             entity.orientation = simd_quatf(angle: npc.heading, axis: [0, 1, 0])
+
             // 60FPS Optimization: direct child access instead of recursive tree search
             if let body = entity.children.first, body.name == "body" {
-                body.position.y = abs(sin(npc.stride)) * 0.0005
+                body.position.y = abs(sin(npc.stride)) * (npc.panicTimer > 0 ? 0.0018 : 0.0005)
             }
             entity.components.set(npc)
         }
     }
 
-    /// Triggers biological panic scatter in live ants within the blast radius of a strike
+    /// Triggers biological panic scatter in live ants/citizens within the blast radius of a strike
     @MainActor
-    static func triggerScatter(around blastPos: SIMD3<Float>, radius: Float = 0.050, in npcsRoot: Entity) {
+    static func triggerScatter(around blastPos: SIMD3<Float>, radius: Float = 0.110, in npcsRoot: Entity) {
         let blast2D = SIMD2<Float>(blastPos.x, blastPos.z)
+        var panickedCount = 0
+
+        // 1. First pass: scatter all un-tagged NPCs within generous 110mm radius
         for child in npcsRoot.children {
             guard var npc = child.components[NPCComponent.self] else { continue }
             if let target = child.components[TargetComponent.self], target.isTagged { continue }
             let diff = npc.position - blast2D
             let dist = simd_length(diff)
             if dist < radius && dist > 1e-4 {
-                npc.panicTimer = Float.random(in: 1.1...1.7)
+                npc.panicTimer = Float.random(in: 2.4...3.6)
                 let fleeDir = simd_normalize(diff)
-                // Add jitter so the swarm fans out organically
-                let jitterAngle = Float.random(in: -0.5...0.5)
+                // Fan out organically with broad jitter
+                let jitterAngle = Float.random(in: -0.8...0.8)
                 let rot = simd_quatf(angle: jitterAngle, axis: [0, 1, 0])
                 let rotatedFlee = rot.act(SIMD3<Float>(fleeDir.x, 0, fleeDir.y))
-                npc.panicVector = SIMD2<Float>(rotatedFlee.x, rotatedFlee.z)
+                npc.panicVector = simd_normalize(SIMD2<Float>(rotatedFlee.x, rotatedFlee.z))
                 child.components.set(npc)
+                panickedCount += 1
             }
         }
+
+        // 2. If blast happened on an isolated edge with few nearby NPCs, scatter the 3 closest live NPCs
+        if panickedCount < 2 {
+            let sortedLive = npcsRoot.children.compactMap { child -> (Entity, NPCComponent, Float)? in
+                guard let npc = child.components[NPCComponent.self] else { return nil }
+                if let target = child.components[TargetComponent.self], target.isTagged { return nil }
+                let d = simd_length(npc.position - blast2D)
+                return (child, npc, d)
+            }.sorted { $0.2 < $1.2 }
+
+            for item in sortedLive.prefix(3) {
+                var npc = item.1
+                npc.panicTimer = Float.random(in: 2.2...3.2)
+                let dir = item.2 > 1e-4 ? simd_normalize(npc.position - blast2D) : SIMD2<Float>(1, 0)
+                let jitterAngle = Float.random(in: -0.8...0.8)
+                let rot = simd_quatf(angle: jitterAngle, axis: [0, 1, 0])
+                let rotatedFlee = rot.act(SIMD3<Float>(dir.x, 0, dir.y))
+                npc.panicVector = simd_normalize(SIMD2<Float>(rotatedFlee.x, rotatedFlee.z))
+                item.0.components.set(npc)
+                panickedCount += 1
+            }
+        }
+
+        SessionLogger.shared.log("SWARM PANIC: triggered scatter for \(panickedCount) entities (radius \(Int(radius * 1000))mm, sprint 7.5x)", category: "AI")
     }
 
     private static func advance(_ npc: inout NPCComponent, dt: Float, terrain: TerrainData) {
-        // Ant Panic Scatter Mode (scurry rapidly away from orbital blast impact)
+        // High-Speed Ant / Citizen Panic Scatter Mode (rapid 7.5x sprint away from blast)
         if npc.panicTimer > 0 {
             npc.panicTimer -= dt
-            let speedMultiplier: Float = 2.6
+            let speedMultiplier: Float = 7.5
             let step = npc.panicVector * (npc.speed * speedMultiplier) * dt
             let nextPos = npc.position + step
+
+            // Erratic zig-zagging in panic
+            if Float.random(in: 0...1) < 0.12 {
+                let jitter = Float.random(in: -0.7...0.7)
+                let rot = simd_quatf(angle: jitter, axis: [0, 1, 0])
+                let rotated = rot.act(SIMD3<Float>(npc.panicVector.x, 0, npc.panicVector.y))
+                npc.panicVector = simd_normalize(SIMD2<Float>(rotated.x, rotated.z))
+            }
 
             // Keep within pin-block terrain footprint
             let minX: Float = 0.008
@@ -80,8 +127,11 @@ struct NPCSystem: System {
             if nextPos.x >= minX && nextPos.x <= maxX && nextPos.y >= minZ && nextPos.y <= maxZ {
                 npc.position = nextPos
             } else {
-                // Reverse panic direction upon wall contact
-                npc.panicVector = -npc.panicVector
+                // Bounce and scramble away upon terrain perimeter boundary
+                let bounceJitter = Float.random(in: -0.9...0.9)
+                let rot = simd_quatf(angle: .pi + bounceJitter, axis: [0, 1, 0])
+                let reversed = rot.act(SIMD3<Float>(npc.panicVector.x, 0, npc.panicVector.y))
+                npc.panicVector = simd_normalize(SIMD2<Float>(reversed.x, reversed.z))
             }
             return
         }

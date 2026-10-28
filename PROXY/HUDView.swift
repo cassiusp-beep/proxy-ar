@@ -34,9 +34,9 @@ struct HUDView: View {
             )
             .ignoresSafeArea()
 
-            // 1b. Optical Zoom Telephoto Vignette & Sensor Crop Frame
+            // 1b. Artificial Synthetic Sensor Crop Surveillance Framing
             if gameState.zoomFactor > 1.05 {
-                opticalScopeOverlay
+                syntheticSensorCropOverlay
                     .transition(.opacity)
             }
 
@@ -114,6 +114,12 @@ struct HUDView: View {
                     .background(Color.red.opacity(Double(gameState.droneDamageFlashTimer / 0.45) * 0.18))
                     .ignoresSafeArea()
                     .allowsHitTesting(false)
+            }
+
+            // 7. Full-Screen Lost Connection / Telemetry Offline Overlay
+            if gameState.isConnectionLost {
+                lostConnectionOverlay
+                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
             }
         }
         .onAppear {
@@ -243,7 +249,7 @@ struct HUDView: View {
                 gameState.cycleZoom()
             } label: {
                 HStack(spacing: 5) {
-                    Text("ZOOM")
+                    Text("DIGI-ZOOM")
                         .font(.system(size: 8, weight: .semibold, design: .monospaced))
                         .foregroundStyle(primaryColor.opacity(0.85))
                     Text(String(format: "%.1fX", gameState.zoomFactor))
@@ -560,49 +566,162 @@ struct HUDView: View {
         .shadow(color: Color.red.opacity(0.65), radius: 10, x: 0, y: 0)
     }
 
-    // Optical Zoom Sensor Frame & Cinematic Telephoto Vignette
-    private var opticalScopeOverlay: some View {
+    // Artificial Synthetic Sensor Crop Framing (Digital Surveillance Reconnaissance Mode)
+    private var syntheticSensorCropOverlay: some View {
         ZStack {
-            // Edge vignette focusing visual depth
+            // Surveillance CRT edge vignette
             RadialGradient(
-                colors: [.clear, Color.black.opacity(gameState.zoomFactor > 3.0 ? 0.38 : 0.22)],
+                colors: [.clear, Color.black.opacity(gameState.zoomFactor > 3.0 ? 0.44 : 0.28)],
                 center: .center,
-                startRadius: 160,
-                endRadius: 420
+                startRadius: 170,
+                endRadius: 440
             )
             .ignoresSafeArea()
 
-            // 4 Corner Telephoto Framing Brackets
+            // Outer Digital Framing Telemetry Brackets
             VStack {
                 HStack {
-                    Text("┌ OPTICAL SENSOR [\(String(format: "%.0fX", gameState.zoomFactor))]")
+                    Text("┌ SYNTHETIC SENSOR CROP [\(String(format: "%.0fX", gameState.zoomFactor))] // DIGI-FOV \(gameState.zoomFactor > 3.0 ? "14°" : "28°")")
                         .font(.system(size: 8, weight: .bold, design: .monospaced))
-                        .foregroundStyle(primaryColor.opacity(0.85))
+                        .foregroundStyle(primaryColor)
                     Spacer()
-                    Text("E-STAB: LOCKED ┐")
+                    Text("SENSOR MATRIX: 4096×2160 // GAIN: +12dB ┐")
                         .font(.system(size: 8, weight: .bold, design: .monospaced))
-                        .foregroundStyle(primaryColor.opacity(0.85))
+                        .foregroundStyle(primaryColor)
                 }
-                .padding(.horizontal, 68)
-                .padding(.top, 46)
+                .padding(.horizontal, 64)
+                .padding(.top, 44)
 
                 Spacer()
 
                 HStack {
-                    Text("└ FOV: \(gameState.zoomFactor > 3.0 ? "18°" : "32°") // RECON")
+                    Text("└ RESOLUTION ENHANCE: ON // IR-BAND: ACTIVE")
                         .font(.system(size: 8, weight: .bold, design: .monospaced))
-                        .foregroundStyle(primaryColor.opacity(0.85))
+                        .foregroundStyle(primaryColor)
                     Spacer()
-                    Text("SNIPER READY ┘")
+                    Text("PRECISION SIGHTLINE: 0.25 MIL ┘")
                         .font(.system(size: 8, weight: .bold, design: .monospaced))
-                        .foregroundStyle(primaryColor.opacity(0.85))
+                        .foregroundStyle(primaryColor)
                 }
-                .padding(.horizontal, 68)
-                .padding(.bottom, 46)
+                .padding(.horizontal, 64)
+                .padding(.bottom, 44)
             }
+
+            // Central Artificial Sensor Crop Boundary Box with Cross-Rulers
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(
+                    primaryColor.opacity(0.55),
+                    style: StrokeStyle(lineWidth: 1.5, dash: [10, 6])
+                )
+                .frame(width: gameState.zoomFactor > 3.0 ? 320 : 420,
+                       height: gameState.zoomFactor > 3.0 ? 180 : 240)
+                .overlay(
+                    // Fine CRT horizontal scanlines across the cropped zone
+                    VStack(spacing: 6) {
+                        ForEach(0..<16, id: \.self) { _ in
+                            Rectangle()
+                                .fill(primaryColor.opacity(0.06))
+                                .frame(height: 1)
+                        }
+                    }
+                )
         }
         .allowsHitTesting(false)
-        .animation(.easeInOut(duration: 0.25), value: gameState.zoomFactor)
+        .animation(.spring(response: 0.28, dampingFraction: 0.8), value: gameState.zoomFactor)
+    }
+
+    // Full-Screen Lost Connection / Telemetry Dropout Overlay
+    private var lostConnectionOverlay: some View {
+        ZStack {
+            // Dark CRT glitch background with flashing crimson edge
+            Color.black.opacity(0.88)
+                .ignoresSafeArea()
+
+            // Horizontal CRT static scanlines
+            VStack(spacing: 4) {
+                ForEach(0..<36, id: \.self) { _ in
+                    Rectangle()
+                        .fill(Color.red.opacity(0.08))
+                        .frame(height: 1.5)
+                }
+            }
+            .ignoresSafeArea()
+
+            // Outer emergency beacon stroke
+            RoundedRectangle(cornerRadius: 32, style: .continuous)
+                .stroke(Color.red.opacity(0.85), lineWidth: 4)
+                .padding(24)
+                .ignoresSafeArea()
+
+            // Central Telemetry Lost Alert Box
+            VStack(spacing: 12) {
+                HStack(spacing: 10) {
+                    Image(systemName: "antenna.radiowaves.left.and.right.slash")
+                        .font(.system(size: 26, weight: .black))
+                        .foregroundStyle(.red)
+
+                    Text("LOST CONNECTION")
+                        .font(.system(size: 22, weight: .black, design: .monospaced))
+                        .foregroundStyle(.white)
+                }
+
+                Text("UAV-01 SENSOR TELEMETRY COLLAPSED // HULL INTEGRITY 0%")
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.red)
+
+                Text("HOSTILE COUNTER-FIRE SEVERED CARRIER SIGNAL")
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.7))
+
+                Divider()
+                    .background(Color.red.opacity(0.5))
+                    .frame(width: 300)
+                    .padding(.vertical, 4)
+
+                // Reconnection Progress Bar
+                VStack(spacing: 6) {
+                    HStack {
+                        Text("RE-ESTABLISHING AUXILIARY LINK...")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.8))
+                        Spacer()
+                        Text("3.8s")
+                            .font(.system(size: 9, weight: .black, design: .monospaced))
+                            .foregroundStyle(.red)
+                    }
+                    .frame(width: 270)
+
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(Color.white.opacity(0.15))
+
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(Color.red)
+                                .frame(width: geo.size.width * 0.7)
+                        }
+                    }
+                    .frame(width: 270, height: 6)
+                }
+
+                Text("CONTROLS LOCKED // AWAITING SYSTEM REBOOT")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.yellow)
+                    .padding(.top, 4)
+            }
+            .padding(.horizontal, 28)
+            .padding(.vertical, 22)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color(red: 0.08, green: 0.02, blue: 0.02).opacity(0.96))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(Color.red, lineWidth: 2)
+                    )
+            )
+            .shadow(color: Color.red.opacity(0.85), radius: 24, x: 0, y: 0)
+        }
+        .allowsHitTesting(true) // Lock out touches while connection is lost
     }
 
     // MARK: - Reusable Smoked Glass Backing
@@ -750,7 +869,7 @@ struct CenterReticleView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "plus.magnifyingglass")
                         .font(.system(size: 8, weight: .bold))
-                    Text(zoomFactor > 3.5 ? "4.0X TELEPHOTO" : "2.0X OPTICAL")
+                    Text(zoomFactor > 3.5 ? "4.0X DIGI-ZOOM" : "2.0X SENSOR CROP")
                         .font(.system(size: 8, weight: .black, design: .monospaced))
                 }
                 .foregroundStyle(color)
