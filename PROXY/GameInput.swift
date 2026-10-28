@@ -2,6 +2,8 @@ import Foundation
 import GameController
 import Observation
 import simd
+import UIKit
+import AudioToolbox
 
 /// Unified input manager for both hardware gamepads (Backbone One / MFi) and on-screen virtual sticks.
 @Observable
@@ -254,6 +256,16 @@ final class GameInput {
                     GameState.shared.resetGimbal()
                     SessionLogger.shared.log("Controller D-Pad LEFT: Re-center targeting reticle", category: "INPUT")
                 }
+            }
+        }
+
+        // D-Pad Right: Manual Hero Action Snapshot
+        gamepad.dpad.right.pressedChangedHandler = { [weak self] _, _, pressed in
+            if pressed {
+                AudioServicesPlaySystemSound(1108) // Camera shutter
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                SnapshotStore.shared.captureAction(tag: "hero_manual")
+                SessionLogger.shared.log("Controller D-Pad RIGHT: Manual Hero Action Snapshot taken", category: "INPUT")
             }
         }
     }

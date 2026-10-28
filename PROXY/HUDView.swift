@@ -1,4 +1,6 @@
 import SwiftUI
+import UIKit
+import AudioToolbox
 
 /// Landscape military-grade drone HUD inspired by GOLIATH, styled with sleek Mil-Tech & Smoked Glass aesthetics.
 struct HUDView: View {
@@ -198,6 +200,27 @@ struct HUDView: View {
                             .foregroundStyle(primaryColor)
                         Text(prestigeBadgeTitle(gameState.prestigeLevel))
                             .font(.system(size: 9, weight: .heavy, design: .monospaced))
+                            .foregroundStyle(.white)
+                    }
+                }
+
+                Divider()
+                    .frame(height: 10)
+                    .background(Color.white.opacity(0.2))
+
+                // Hero Action Shutter Button
+                Button {
+                    AudioServicesPlaySystemSound(1108) // Shutter click
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    SnapshotStore.shared.captureAction(tag: "hero_manual")
+                    SessionLogger.shared.log("HUD Shutter Button tapped: Manual Hero Action Snapshot taken", category: "HUD")
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "camera.shutter.button.fill")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(accentColor)
+                        Text("HERO")
+                            .font(.system(size: 8, weight: .black, design: .monospaced))
                             .foregroundStyle(.white)
                     }
                 }

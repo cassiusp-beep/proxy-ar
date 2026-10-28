@@ -678,5 +678,27 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun devicectl device 
 
 **Familiar or new:** new. Bridges tabletop virtual AR with physical reality, illuminating the physical resin diorama on every shot.
 
+## 041 · Automated action snapshot capture system, live console logging, and hero shot pipeline
+*2026-10-27. Requested by user ("live log and get in game screenshot from sources of action, I am trying to select a hero shot to feature as a demo page and I want the 10 best images"); implemented by specialist council (`game-designer`, `ios-builder`, `reviewer`, `device-runner`, `documenter`) in `SnapshotStore.swift`, `ARViewContainer.swift`, `MissionSystem.swift`, `NPCSystem.swift`, `GameState.swift`, `GameInput.swift`, and `HUDView.swift`.*
 
+**Decision.**
+- **Dual Pure-AR & Full-HUD Composite Capture (`SnapshotStore.swift`):**
+  - Re-architected `SnapshotStore` as a unified `@unchecked Sendable` singleton with rate-limited action triggers (`actionCooldown = 0.85s`).
+  - For every action event, captures two distinct high-resolution JPEG assets at 92% quality:
+    1. `snap_<timestamp>_<count>_<tag>_ar.jpg`: Pristine 3D RealityKit framebuffer (camera feed + diorama + tracers + orbital beams + NPCs), free of UI clutter.
+    2. `snap_<timestamp>_<count>_<tag>_hud.jpg`: Full window composite containing the military HUD, digital sensor crop borders, targeting reticle brackets, CRT scanlines, and telemetry overlays.
+- **Automated Combat & Action Hooks:**
+  - `strike_direct`: Fired when an orbital strike beam and ballistic tracer impact a locked target.
+  - `strike_assisted` & `strike_blank`: Fired when ordnance is discharged into diorama terrain.
+  - `hostile_launch`: Captured when a citizen popper, ant bio-acid spit, 7.62 tracer, or SAM rocket launches.
+  - `drone_hit`: Captured when hostile fire impacts the drone hull.
+  - `swarm_panic`: Captured during high-speed 7.5x panic scatter sprints.
+  - `sector_cleared`: Captured on sector sterilization fanfare with glowing emerald borders.
+  - `connection_lost`: Captured during CRT telemetry collapse and crimson warning beacon.
+- **Manual Shutter Controls:**
+  - Controller: D-Pad Right immediately triggers `hero_manual` with shutter audio (`1108`) and haptic pulse.
+  - On-Screen HUD: Sleek `[📸 HERO]` button in the top bar.
+- **Live Stream Logging:**
+  - Active via `devicectl device process launch --console`, streaming telemetry directly into `scratch/logs/session_live.log`.
 
+**Familiar or new:** new. Enables hands-free generation and automated harvesting of dramatic, presentation-grade action screenshots for demo pages and portfolios.

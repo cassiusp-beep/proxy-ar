@@ -141,6 +141,7 @@ final class GameState {
             radioMessage = "OPERATOR: ⚠ HULL BREACH // LOST CONNECTION TO DRONE ⚠"
             AudioServicesPlaySystemSound(1053) // Critical alarm buzz
             UINotificationFeedbackGenerator().notificationOccurred(.error)
+            SnapshotStore.shared.captureAction(tag: "connection_lost")
             SessionLogger.shared.log("CRITICAL: Drone shield depleted to 0% — LOST CONNECTION", category: "COMBAT")
 
             DispatchQueue.main.asyncAfter(deadline: .now() + 3.8) { [weak self] in

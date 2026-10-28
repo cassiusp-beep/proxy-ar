@@ -1,15 +1,19 @@
 import RealityKit
 import UIKit
 
-/// Saves what the AR view shows (camera plus overlay; the SwiftUI pill and panel are not part of
-/// the ARView, so they're left out) as JPEGs in Documents/Snapshots/, visible in Files and
-/// pullable with devicectl (Info.plist: UIFileSharingEnabled, LSSupportsOpeningDocumentsInPlace).
-/// Taken ~2 s after each lock and on the debug panel's "Snapshot" button.
-final class SnapshotStore {
+/// Saves high-resolution action and calibration snapshots as JPEGs in Documents/Snapshots/,
+/// visible in Files and pullable with devicectl.
+/// Captures both the pure 3D AR view and the full-screen HUD composite during action moments.
+final class SnapshotStore: @unchecked Sendable {
+    static let shared = SnapshotStore()
     static let lockDelay: TimeInterval = 2
-    static let quality: CGFloat = 0.9
+    static let quality: CGFloat = 0.92
 
-    /// Snapshots taken this launch, for the file name.
+    weak var activeARView: ARView?
+    private var lastActionSnapshotTime: TimeInterval = 0
+    private let actionCooldown: TimeInterval = 0.85
+
+    /// Snapshots taken this launch, for the file name sequence.
     private var count = 0
 
     static var folder: URL {
@@ -17,33 +21,70 @@ final class SnapshotStore {
             .appendingPathComponent("Snapshots", isDirectory: true)
     }
 
-    /// `tag`: "lock<k>", "relock<k>" or "manual". `lock` is the lock count so far (0 if none),
-    /// `mode` the last lock's sampling mode, `opacity` the city opacity (0–1). Call on main.
-    func capture(_ arView: ARView, tag: String, lock: Int, mode: String, setup: String, opacity: Float) {
+    /// Triggers an automatic or manual action snapshot (e.g. strike, hostile retaliation, swarm panic, hero shot).
+    func captureAction(tag: String) {
+        let now = CACurrentMediaTime()
+        guard now - lastActionSnapshotTime > actionCooldown else { return }
+        lastActionSnapshotTime = now
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let arView = self.activeARView else { return }
+            self.capture(arView, tag: tag, lock: 0, mode: "action", setup: "action", opacity: 1.0)
+        }
+    }
+
+    /// Captures the ARView and window hierarchy, saving both pure AR and composite HUD images.
+    func capture(_ arView: ARView, tag: String, lock: Int = 0, mode: String = "auto", setup: String = "auto", opacity: Float = 1.0) {
         count += 1
+        let currentCount = count
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyyMMdd-HHmmss"
-        let name = "snap_\(formatter.string(from: Date()))_\(count)_\(tag).jpg"
+        let timestamp = formatter.string(from: Date())
+        let baseName = "snap_\(timestamp)_\(currentCount)_\(tag)"
+
+        // Optional full-screen HUD window composite capture
+        var hudImageData: Data? = nil
+        if let window = arView.window {
+            let renderer = UIGraphicsImageRenderer(bounds: window.bounds)
+            let composite = renderer.image { _ in
+                window.drawHierarchy(in: window.bounds, afterScreenUpdates: false)
+            }
+            hudImageData = composite.jpegData(compressionQuality: SnapshotStore.quality)
+        }
+
+        // 3D RealityKit Framebuffer snapshot
         arView.snapshot(saveToHDR: false) { image in
             guard let image else {
-                print("[PROXY] SNAPSHOT failed: no image (\(name)).")
+                SessionLogger.shared.log("SNAPSHOT failed: no image (\(baseName))", category: "SNAPSHOT")
                 return
             }
+
+            let arImageData = image.jpegData(compressionQuality: SnapshotStore.quality)
+
             // Encode and write off the main thread.
             Task.detached(priority: .utility) {
                 let folder = SnapshotStore.folder
                 do {
                     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-                    guard let data = image.jpegData(compressionQuality: SnapshotStore.quality) else {
-                        print("[PROXY] SNAPSHOT failed: JPEG encoding (\(name)).")
-                        return
+
+                    // 1. Save AR 3D View
+                    if let arData = arImageData {
+                        let arFile = folder.appendingPathComponent("\(baseName)_ar.jpg")
+                        try arData.write(to: arFile, options: .atomic)
                     }
-                    try data.write(to: folder.appendingPathComponent(name), options: .atomic)
+
+                    // 2. Save Full-Screen HUD Composite
+                    if let hudData = hudImageData {
+                        let hudFile = folder.appendingPathComponent("\(baseName)_hud.jpg")
+                        try hudData.write(to: hudFile, options: .atomic)
+                    }
+
+                    SessionLogger.shared.log("ACTION SNAPSHOT: \(baseName) [lock=\(lock) tag=\(tag)]", category: "SNAPSHOT")
                     print(String(format: "[PROXY] SNAPSHOT file=%@ lock=%d mode=%@ setup=%@ opacity=%.0f",
-                                 name, lock, mode, setup, opacity * 100))
+                                 baseName, lock, mode, setup, opacity * 100))
                 } catch {
-                    print("[PROXY] SNAPSHOT failed: \(error.localizedDescription) (\(name)).")
+                    SessionLogger.shared.log("SNAPSHOT save error: \(error.localizedDescription) (\(baseName))", category: "SNAPSHOT")
                 }
             }
         }

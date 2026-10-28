@@ -99,6 +99,9 @@ struct NPCSystem: System {
             }
         }
 
+        if panickedCount > 0 {
+            SnapshotStore.shared.captureAction(tag: "swarm_panic")
+        }
         SessionLogger.shared.log("SWARM PANIC: triggered scatter for \(panickedCount) entities (radius \(Int(radius * 1000))mm, sprint 7.5x)", category: "AI")
     }
 

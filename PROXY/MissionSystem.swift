@@ -213,6 +213,7 @@ struct MissionSystem: System {
             GameState.shared.tagBannerSubtitle = "ALL HOSTILE SIGNATURES ELIMINATED · AREA SECURED"
             GameState.shared.tagBannerTimer = 4.0
             GameState.shared.screenFlashTimer = 0.40
+            SnapshotStore.shared.captureAction(tag: "sector_cleared")
 
             UINotificationFeedbackGenerator().notificationOccurred(.success)
             AudioServicesPlaySystemSound(1025)
@@ -495,6 +496,7 @@ final class NPCCombatSystem {
                 } else {
                     AudioServicesPlaySystemSound(1521) // Acid impact
                 }
+                SnapshotStore.shared.captureAction(tag: "drone_hit")
                 SessionLogger.shared.log("HOSTILE HIT: [P\(prestige)] counter-fire impacted drone! Shield at \(Int(GameState.shared.droneShield))%", category: "COMBAT")
                 continue
             }
@@ -602,6 +604,7 @@ final class NPCCombatSystem {
         // HUD Alert
         GameState.shared.hostileWarningTimer = 1.3
         GameState.shared.hostileWarningText = warningText
+        SnapshotStore.shared.captureAction(tag: "hostile_launch")
         SessionLogger.shared.log("HOSTILE FIRED: [P\(prestige)] projectile launched from NPC at \(start) toward drone", category: "COMBAT")
     }
 }

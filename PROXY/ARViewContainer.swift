@@ -13,6 +13,7 @@ struct ARViewContainer: UIViewRepresentable {
     func makeUIView(context: Context) -> ARView {
         let arView = ARView(frame: .zero, cameraMode: .ar, automaticallyConfigureSession: false)
         context.coordinator.arView = arView
+        SnapshotStore.shared.activeARView = arView
         arView.session.delegate = context.coordinator
 
         let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.toggleDebug))
@@ -79,7 +80,7 @@ struct ARViewContainer: UIViewRepresentable {
         /// Locks made this launch and the last one's sampling mode, for the snapshot log line.
         var lockCount = 0
         var lastLockMode = "none"
-        private let snapshots = SnapshotStore()
+        private let snapshots = SnapshotStore.shared
         private var scan: DepthScan?
         /// One sampler per reference image name: the setup's lock marker and, for the pair setups
         /// (Diorama, pin block), the right one ("CalibrationMarkerRight").
@@ -415,6 +416,7 @@ struct ARViewContainer: UIViewRepresentable {
                     let targetInContent = targetEntity.position(relativeTo: offsetEntity)
                     MissionSystem.spawnTracer(from: camInContent, to: targetInContent, in: offsetEntity)
                     MissionSystem.spawnStrikeRay(targetPos: targetInContent, in: offsetEntity)
+                    SnapshotStore.shared.captureAction(tag: "strike_direct")
 
                     reticleHoverTime = 0
                     gameState.isTargetLocked = false
@@ -470,6 +472,7 @@ struct ARViewContainer: UIViewRepresentable {
                         let targetInContent = assistedTarget.entity.position(relativeTo: offsetEntity)
                         MissionSystem.spawnTracer(from: camInContent, to: targetInContent, in: offsetEntity)
                         MissionSystem.spawnStrikeRay(targetPos: targetInContent, in: offsetEntity)
+                        SnapshotStore.shared.captureAction(tag: "strike_assisted")
                         MissionSystem.tag(npcEntity: assistedTarget.entity)
                         if let npcsRoot = content?.npcs {
                             NPCCombatSystem.shared.triggerRetaliation(from: assistedTarget.entity, in: npcsRoot, toward: camInContent)
@@ -483,6 +486,7 @@ struct ARViewContainer: UIViewRepresentable {
                         MissionSystem.spawnTracer(from: camInContent, to: impactInContent, in: offsetEntity)
                         MissionSystem.spawnImpactPuff(at: impactInContent, in: offsetEntity)
                         MissionSystem.spawnStrikeRay(targetPos: impactInContent, in: offsetEntity)
+                        SnapshotStore.shared.captureAction(tag: "strike_blank")
                         SessionLogger.shared.log("BLANK STRIKE: fired round (\(gameState.ammo)/\(gameState.maxAmmo)) into diorama terrain", category: "RETICLE")
                     }
                 }
