@@ -717,4 +717,32 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun devicectl device 
   - Replaced with full-screen military digital surveillance aesthetics: full-display fine CRT horizontal raster scanlines, outer bezel framing telemetry (`[ DIGITAL MAGNIFICATION: 2.0X / 4.0X ]`, `PIXEL BINNING: 2×2 / 4×4`), and subtle peripheral vignette.
 
 **Familiar or new:** new. Provides authentic, cinematic full-screen digital surveillance magnification while maintaining pixel-perfect reticle aiming and diorama alignment.
+## 043 · Dynamic 360° threat radar sensor & tactical evasive countermeasure boost system with incoming attack deflection
+*2026-10-27. Requested by user ("Also does the radar function to avoid incoming attacks maybe it's 360 sensing for the drone instead ? and what does the boost do - to me it does nothing"); implemented by specialist council (`game-designer`, `ios-builder`, `reviewer`, `device-runner`, `documenter`) in `GameState.swift`, `MissionSystem.swift`, `ARViewContainer.swift`, `GameInput.swift`, `HUDView.swift`, and `DroneSystem.swift`.*
 
+**Decision.**
+- **User Feedback & Problem Analysis:**
+  - The HUD radar widget was previously a static decorative graphic with two hardcoded dots, failing to provide actionable tactical information.
+  - The `BOOST` tool slot was merely a simulation multiplier on an invisible horizontal velocity vector that had zero observable effect during AR flight, leaving players feeling that boost did nothing.
+- **1. Dynamic 360° Threat Sensing Radar (`GameState.swift`, `MissionSystem.swift`, `HUDView.swift`):**
+  - Upgraded `tacticalRadarWidget` from static geometry into a live polar threat sensor.
+  - In `NPCCombatSystem.update`, computed 360° azimuth angle (`atan2(rightDot, forwardDot)`) and normalized diorama distance (`min(1.0, dist / 0.40)`) for all entities relative to the camera drone's forward/right vectors in content space.
+  - Polar coordinates map seamlessly onto the radar display where `(0, -R)` points straight ahead along the drone's boresight:
+    - **Hostile In-Flight Projectiles (SAMs, AK-47 tracers, ant bio-acid, citizen corks):** Rendered as flashing crimson diamond blips closing inward toward the center drone dot. When within close threat range (< 65% distance), an animated crimson dashed trajectory vector draws from the blip directly to the drone, giving operators instant directional threat warning.
+    - **Surrounding Ground Targets / NPCs:** Rendered as 360° ambient blips (amber for active targets, green for neutralized targets), providing complete spatial situational awareness as the operator orbits the table.
+    - **Dynamic Radar Border & Readouts:** Outer bezel pulses crimson with `"⚠ THREAT: <count>"` when attacks are airborne, pulses cyan with `"⚡ BOOST 360°"` during countermeasure surge, and features an animated rotating sweep line.
+- **2. Tactical Evasive Countermeasure BOOST (`GameState.swift` & `MissionSystem.swift`):**
+  - Transformed `BOOST` into an active, high-leverage defensive countermeasure:
+    - **Kinetic Deflection Shield:** When the player taps `[⚡ BOOST]` (or presses `L1` / `Square` on controller), the drone consumes 15% fuel to engage an evasive thruster surge for 1.4 seconds. Any incoming hostile projectile within 220mm of the drone is intercepted and vaporized in mid-air before hitting the shield!
+    - **Scoring & Audio/Haptics:** Deflecting a threat awards `+250 PTS`, plays a high-frequency metallic ricochet ping (`1052`) and lens spark tick (`1057`), triggers heavy tactile haptics (`.heavy`), and displays a high-visibility toast banner: `★ THREAT DEFLECTED (+250 PTS) ★`.
+    - **Automated Hero Snapshot:** Deflections trigger `SnapshotStore.captureAction(tag: "boost_deflection")` for the hero shot demo pipeline.
+- **3. High-Agility Gimbal Turbo Slew (`ARViewContainer.swift`):**
+  - While boost is active (`gameState.isBoostActive`), targeting reticle joystick slew speed doubles from `260.0 pt/s` to **`520.0 pt/s`**, enabling lightning-fast snap-targeting and reticle re-positioning across the display.
+- **4. Visceral Visual & Audio Aesthetics (`HUDView.swift`):**
+  - Added `evasiveSurgeOverlay`: screen edges pulse with high-intensity cyan force-field vignette and bottom telemetry readout: `⚡ EVASIVE COUNTERMEASURE ACTIVE // DEFLECTION SHIELD [1.4S]`.
+  - Added `boostDeflectionBanner`: cyan-and-black floating badge with shield icon and `// INTERCEPTED` confirmation.
+  - Updated tool slot button: displays `[-15%]` fuel cost, highlights in glowing cyan with `DEFLECT` tag during active surge, and shows `L1` controller prompt.
+- **5. Controller Mappings (`GameInput.swift`):**
+  - Bound PlayStation `Square` (□ / buttonX) and `L1` (leftShoulder) to trigger `GameState.shared.triggerBoost()`.
+
+**Familiar or new:** new. Solves the player's core gameplay question by turning the radar and boost into an essential, visceral combat defense loop.

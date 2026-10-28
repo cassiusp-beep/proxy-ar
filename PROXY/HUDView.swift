@@ -109,7 +109,23 @@ struct HUDView: View {
                 }
             }
 
-            // 6. Red Screen Damage Flash Vignette (Hostile Impact)
+            // 6. Tactical Boost Threat Deflection Toast Banner
+            if gameState.boostDeflectionTimer > 0 {
+                VStack {
+                    boostDeflectionBanner
+                        .transition(.scale(scale: 0.85).combined(with: .opacity))
+                        .padding(.top, 76)
+                    Spacer()
+                }
+            }
+
+            // 7. Tactical Boost Evasive Thruster Surge Screen Overlay
+            if gameState.isBoostActive {
+                evasiveSurgeOverlay
+                    .transition(.opacity)
+            }
+
+            // 8. Red Screen Damage Flash Vignette (Hostile Impact)
             if gameState.droneDamageFlashTimer > 0 {
                 RoundedRectangle(cornerRadius: 54, style: .continuous)
                     .stroke(Color.red.opacity(Double(gameState.droneDamageFlashTimer / 0.45)), lineWidth: 16)
@@ -118,7 +134,7 @@ struct HUDView: View {
                     .allowsHitTesting(false)
             }
 
-            // 7. Full-Screen Lost Connection / Telemetry Offline Overlay
+            // 9. Full-Screen Lost Connection / Telemetry Offline Overlay
             if gameState.isConnectionLost {
                 lostConnectionOverlay
                     .transition(.opacity.combined(with: .scale(scale: 0.96)))
@@ -417,11 +433,14 @@ struct HUDView: View {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                     GameInput.shared.tagTriggered = false
                 }
+            } else if tool == .boost {
+                _ = GameState.shared.triggerBoost()
             }
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: tool.iconName)
+                Image(systemName: tool == .boost && gameState.isBoostActive ? "bolt.shield.fill" : tool.iconName)
                     .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(tool == .boost && gameState.isBoostActive ? Color.cyan : (isSelected ? Color.black : (isThermal ? primaryColor : .white)))
 
                 Text(tool.title.uppercased())
                     .font(.system(size: 10, weight: .black, design: .monospaced))
@@ -431,6 +450,10 @@ struct HUDView: View {
                     Text("[\(gameState.ammo)]")
                         .font(.system(size: 9, weight: .black, design: .monospaced))
                         .foregroundStyle(isSelected ? Color.black : (gameState.ammo <= 2 ? warningColor : primaryColor))
+                } else if tool == .boost {
+                    Text(gameState.isBoostActive ? "DEFLECT" : "-15%")
+                        .font(.system(size: 8, weight: .black, design: .monospaced))
+                        .foregroundStyle(gameState.isBoostActive ? Color.cyan : (gameState.fuel < 10 ? Color.red : (isSelected ? Color.black : Color.white.opacity(0.6))))
                 }
 
                 // PlayStation controller button prompt
@@ -449,6 +472,13 @@ struct HUDView: View {
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
                             .background(isSelected ? Color.white : Color.white.opacity(0.2), in: RoundedRectangle(cornerRadius: 2))
+                    } else if tool == .boost {
+                        Text("L1")
+                            .font(.system(size: 8, weight: .black, design: .monospaced))
+                            .foregroundStyle(isSelected ? .black : .white)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(isSelected ? Color.white : Color.white.opacity(0.2), in: RoundedRectangle(cornerRadius: 2))
                     }
                 }
             }
@@ -456,74 +486,159 @@ struct HUDView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
             .background(
-                isSelected ? (isThermal ? primaryColor : accentColor) : Color.white.opacity(0.04),
+                tool == .boost && gameState.isBoostActive
+                    ? Color.cyan.opacity(0.35)
+                    : (isSelected ? (isThermal ? primaryColor : accentColor) : Color.white.opacity(0.04)),
                 in: RoundedRectangle(cornerRadius: 6)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
-                    .stroke(isSelected ? (isThermal ? primaryColor : accentColor) : Color.clear, lineWidth: 1)
+                    .stroke(
+                        tool == .boost && gameState.isBoostActive
+                            ? Color.cyan
+                            : (isSelected ? (isThermal ? primaryColor : accentColor) : Color.clear),
+                        lineWidth: tool == .boost && gameState.isBoostActive ? 1.5 : 1
+                    )
             )
-            .shadow(color: isSelected ? (isThermal ? primaryColor : accentColor).opacity(0.5) : .clear, radius: 6)
+            .shadow(
+                color: tool == .boost && gameState.isBoostActive
+                    ? Color.cyan.opacity(0.8)
+                    : (isSelected ? (isThermal ? primaryColor : accentColor).opacity(0.5) : .clear),
+                radius: 6
+            )
         }
     }
 
-    // Tactical Radar Widget with grid lines & range rings
+    // Dynamic 360° Tactical Radar Threat Sensing Widget
     private var tacticalRadarWidget: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 6)
-                .fill(Color(red: 0.05, green: 0.07, blue: 0.09).opacity(0.85))
-                .frame(width: 68, height: 58)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(primaryColor.opacity(0.4), lineWidth: 0.75)
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
+            let now = timeline.date.timeIntervalSinceReferenceDate
+            let sweepRad = (now.truncatingRemainder(dividingBy: 2.0) / 2.0) * 2.0 * .pi
+            let radarRadius: CGFloat = 22.0
+
+            ZStack {
+                // Background backing
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color(red: 0.04, green: 0.06, blue: 0.08).opacity(0.92))
+                    .frame(width: 76, height: 62)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(
+                                gameState.hasIncomingHostile
+                                    ? Color.red.opacity(0.95)
+                                    : (gameState.isBoostActive ? Color.cyan.opacity(0.95) : primaryColor.opacity(0.4)),
+                                lineWidth: (gameState.hasIncomingHostile || gameState.isBoostActive) ? 1.5 : 0.75
+                            )
+                    )
+                    .shadow(
+                        color: gameState.hasIncomingHostile
+                            ? Color.red.opacity(0.7)
+                            : (gameState.isBoostActive ? Color.cyan.opacity(0.65) : .clear),
+                        radius: 8
+                    )
+
+                // Concentric range circles (10M and 25M boundary)
+                Circle()
+                    .stroke(primaryColor.opacity(0.20), lineWidth: 0.75)
+                    .frame(width: 22, height: 22)
+
+                Circle()
+                    .stroke(
+                        gameState.hasIncomingHostile
+                            ? Color.red.opacity(0.35)
+                            : primaryColor.opacity(0.30),
+                        lineWidth: 0.75
+                    )
+                    .frame(width: 44, height: 44)
+
+                // Crosshair coordinate axes
+                Rectangle()
+                    .fill(primaryColor.opacity(0.18))
+                    .frame(width: 48, height: 0.5)
+
+                Rectangle()
+                    .fill(primaryColor.opacity(0.18))
+                    .frame(width: 0.5, height: 44)
+
+                // Rotating 360° radar sweep line
+                Path { path in
+                    path.move(to: CGPoint(x: 38, y: 31))
+                    let endX = 38 + CGFloat(cos(sweepRad)) * radarRadius
+                    let endY = 31 + CGFloat(sin(sweepRad)) * radarRadius
+                    path.addLine(to: CGPoint(x: endX, y: endY))
+                }
+                .stroke(
+                    gameState.hasIncomingHostile ? Color.red.opacity(0.75) : primaryColor.opacity(0.75),
+                    lineWidth: 1.0
                 )
 
-            // Radar concentric range circles
-            Circle()
-                .stroke(primaryColor.opacity(0.20), lineWidth: 0.75)
-                .frame(width: 22, height: 22)
+                // Center drone marker (triangle pointed along boresight)
+                Image(systemName: "location.north.fill")
+                    .font(.system(size: 7, weight: .black))
+                    .foregroundStyle(gameState.isBoostActive ? Color.cyan : primaryColor)
 
-            Circle()
-                .stroke(primaryColor.opacity(0.25), lineWidth: 0.75)
-                .frame(width: 44, height: 44)
+                // Dynamic 360° Radar Threat Blips
+                ForEach(gameState.radarThreats) { threat in
+                    let xOff = CGFloat(sin(threat.azimuthRad) * threat.distanceNorm) * radarRadius
+                    let yOff = CGFloat(-cos(threat.azimuthRad) * threat.distanceNorm) * radarRadius
 
-            // Crosshair lines
-            Rectangle()
-                .fill(primaryColor.opacity(0.20))
-                .frame(width: 52, height: 0.5)
+                    if threat.isProjectile {
+                        // Incoming Hostile Projectile (crimson blip & directional threat ray)
+                        ZStack {
+                            Circle()
+                                .fill(Color.red.opacity(0.35))
+                                .frame(width: 10, height: 10)
 
-            Rectangle()
-                .fill(primaryColor.opacity(0.20))
-                .frame(width: 0.5, height: 44)
+                            Image(systemName: "triangle.fill")
+                                .font(.system(size: 5, weight: .black))
+                                .rotationEffect(Angle(radians: Double(threat.azimuthRad) + .pi))
+                                .foregroundStyle(Color(red: 1.0, green: 0.15, blue: 0.3))
 
-            // Center drone marker
-            Circle()
-                .fill(primaryColor)
-                .frame(width: 4, height: 4)
+                            // Danger close inbound trajectory dashed vector (< 65% distance)
+                            if threat.distanceNorm < 0.65 {
+                                Path { p in
+                                    p.move(to: CGPoint(x: 38 + xOff, y: 31 + yOff))
+                                    p.addLine(to: CGPoint(x: 38, y: 31))
+                                }
+                                .stroke(Color.red.opacity(0.65), style: StrokeStyle(lineWidth: 0.75, dash: [2, 2]))
+                            }
+                        }
+                        .offset(x: xOff, y: yOff)
+                    } else {
+                        // Ground Target / NPC
+                        Circle()
+                            .fill(threat.isTagged ? Color.green.opacity(0.6) : Color(red: 1.0, green: 0.75, blue: 0.15))
+                            .frame(width: 3.5, height: 3.5)
+                            .offset(x: xOff, y: yOff)
+                    }
+                }
 
-            // Target blips
-            Circle()
-                .fill(accentColor)
-                .frame(width: 3.5, height: 3.5)
-                .offset(x: 10, y: -8)
-
-            Circle()
-                .fill(accentColor)
-                .frame(width: 3.5, height: 3.5)
-                .offset(x: -12, y: 11)
-
-            // Radar sweep tag
-            VStack {
-                HStack {
-                    Text("RDR // 25M")
-                        .font(.system(size: 6, weight: .black, design: .monospaced))
-                        .foregroundStyle(primaryColor.opacity(0.7))
+                // Telemetry labels header
+                VStack {
+                    HStack {
+                        if gameState.hasIncomingHostile {
+                            Text("⚠ THREAT: \(gameState.activeThreatCount)")
+                                .font(.system(size: 6, weight: .black, design: .monospaced))
+                                .foregroundStyle(Color.red)
+                        } else if gameState.isBoostActive {
+                            Text("⚡ BOOST 360°")
+                                .font(.system(size: 6, weight: .black, design: .monospaced))
+                                .foregroundStyle(Color.cyan)
+                        } else {
+                            Text("RDR // 25M")
+                                .font(.system(size: 6, weight: .black, design: .monospaced))
+                                .foregroundStyle(primaryColor.opacity(0.75))
+                        }
+                        Spacer()
+                        Text("360°")
+                            .font(.system(size: 5, weight: .bold, design: .monospaced))
+                            .foregroundStyle(primaryColor.opacity(0.5))
+                    }
                     Spacer()
                 }
-                Spacer()
+                .padding(4)
+                .frame(width: 76, height: 62)
             }
-            .padding(4)
-            .frame(width: 68, height: 58)
         }
     }
 
@@ -588,6 +703,64 @@ struct HUDView: View {
                 )
         )
         .shadow(color: Color.red.opacity(0.65), radius: 10, x: 0, y: 0)
+    }
+
+    // Boost Deflection Confirmation Toast Banner
+    private var boostDeflectionBanner: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "shield.lefthalf.filled.badge.checkmark")
+                .font(.system(size: 14, weight: .black))
+                .foregroundStyle(Color.cyan)
+
+            Text(gameState.boostDeflectionText)
+                .font(.system(size: 11, weight: .black, design: .monospaced))
+                .foregroundStyle(.white)
+
+            Text("// INTERCEPTED")
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .foregroundStyle(Color.cyan)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(
+            Color(red: 0.04, green: 0.12, blue: 0.18).opacity(0.95),
+            in: RoundedRectangle(cornerRadius: 8)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.cyan, lineWidth: 1.5)
+        )
+        .shadow(color: Color.cyan.opacity(0.75), radius: 12)
+    }
+
+    // Boost Evasive Surge Overlay (Screen edges glow cyan with speed streaks)
+    private var evasiveSurgeOverlay: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 54, style: .continuous)
+                .stroke(Color.cyan.opacity(0.55), lineWidth: 8)
+                .background(Color.cyan.opacity(0.06))
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+
+            VStack {
+                Spacer()
+                HStack(spacing: 6) {
+                    Image(systemName: "bolt.shield.fill")
+                        .font(.system(size: 11, weight: .black))
+                        .foregroundStyle(Color.cyan)
+
+                    Text("EVASIVE COUNTERMEASURE ACTIVE // DEFLECTION SHIELD [\(String(format: "%.1f", gameState.boostActiveTimer))S]")
+                        .font(.system(size: 10, weight: .black, design: .monospaced))
+                        .foregroundStyle(.white)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 5)
+                .background(Color.black.opacity(0.85), in: RoundedRectangle(cornerRadius: 6))
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.cyan, lineWidth: 1))
+                .padding(.bottom, 82)
+            }
+            .allowsHitTesting(false)
+        }
     }
 
     // Full-Screen Digital Surveillance Enlargement Overlay (Frame remains full screen)

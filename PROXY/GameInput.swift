@@ -174,13 +174,14 @@ final class GameInput {
             }
         }
 
-        gamepad.buttonX.pressedChangedHandler = { [weak self] _, _, pressed in
+        // Square [□] button: Tactical Evasive Boost / Countermeasure
+        gamepad.buttonX.pressedChangedHandler = { _, _, pressed in
             if pressed {
                 guard !GameState.shared.isConnectionLost else { return }
-                SessionLogger.shared.log("Controller □ (Button X) pressed: TAG/STRIKE triggered", category: "INPUT")
-                self?.tagTriggered = true
+                SessionLogger.shared.log("Controller □ (Button X) pressed: TACTICAL BOOST triggered", category: "INPUT")
                 Task { @MainActor in
-                    GameState.shared.selectedToolIndex = GameState.ToolSlot.tag.rawValue
+                    GameState.shared.selectedToolIndex = GameState.ToolSlot.boost.rawValue
+                    GameState.shared.triggerBoost()
                 }
             }
         }
@@ -210,12 +211,14 @@ final class GameInput {
             }
         }
 
-        // Shoulder buttons [L1 / R1]: cycle tools
-        gamepad.leftShoulder.pressedChangedHandler = { [weak self] _, _, pressed in
+        // Left Shoulder [L1]: Tactical Evasive Boost / Countermeasure
+        gamepad.leftShoulder.pressedChangedHandler = { _, _, pressed in
             if pressed {
-                SessionLogger.shared.log("Controller L1 pressed: prev tool", category: "INPUT")
+                guard !GameState.shared.isConnectionLost else { return }
+                SessionLogger.shared.log("Controller L1 pressed: TACTICAL BOOST triggered", category: "INPUT")
                 Task { @MainActor in
-                    GameState.shared.cycleTool(delta: -1)
+                    GameState.shared.selectedToolIndex = GameState.ToolSlot.boost.rawValue
+                    GameState.shared.triggerBoost()
                 }
             }
         }

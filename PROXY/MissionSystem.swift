@@ -459,8 +459,8 @@ final class NPCCombatSystem {
 
     private init() {}
 
-    /// Main frame update: advances in-flight projectiles toward drone camera and detects hits
-    func update(dronePos: SIMD3<Float>, npcsRoot: Entity, dt: Float) {
+    /// Main frame update: advances in-flight projectiles toward drone camera, detects hits, executes boost deflection, and calculates 360° radar threats
+    func update(dronePos: SIMD3<Float>, droneFwd: SIMD3<Float>, droneRight: SIMD3<Float>, npcsRoot: Entity, dt: Float) {
         ambientRetaliationTimer -= dt
         if ambientRetaliationTimer <= 0 {
             ambientRetaliationTimer = Float.random(in: 3.5...5.5)
@@ -478,6 +478,23 @@ final class NPCCombatSystem {
             proj.entity.position = proj.position
 
             let distToDrone = simd_length(proj.position - dronePos)
+
+            // TACTICAL EVASIVE BOOST DEFLECTION
+            if GameState.shared.isBoostActive && distToDrone < 0.22 {
+                // Kinetic countermeasure shield intercepts projectile in mid-air!
+                proj.entity.removeFromParent()
+                AudioServicesPlaySystemSound(1052) // Metallic deflection / sonic ping
+                AudioServicesPlaySystemSound(1057) // Lens / spark tick
+                UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                GameState.shared.boostDeflectedCount += 1
+                GameState.shared.boostDeflectionTimer = 1.6
+                GameState.shared.boostDeflectionText = "★ THREAT DEFLECTED (+250 PTS) ★"
+                GameState.shared.score += 250
+                SnapshotStore.shared.captureAction(tag: "boost_deflection")
+                SessionLogger.shared.log("TACTICAL DEFLECTION: Incoming projectile destroyed by evasive boost shield! (+250 PTS)", category: "COMBAT")
+                continue
+            }
+
             if distToDrone < 0.045 {
                 // Direct Hit on Drone!
                 proj.entity.removeFromParent()
@@ -509,6 +526,71 @@ final class NPCCombatSystem {
             remaining.append(proj)
         }
         activeProjectiles = remaining
+
+        // 360° Tactical Radar Threat Sensing Calculation
+        var threats: [GameState.RadarThreat] = []
+        let maxRadarRange: Float = 0.40 // 40cm diorama boundary
+
+        let fwdLen = simd_length(SIMD2<Float>(droneFwd.x, droneFwd.z))
+        let rightLen = simd_length(SIMD2<Float>(droneRight.x, droneRight.z))
+        let fwdH = fwdLen > 1e-4 ? (SIMD2<Float>(droneFwd.x, droneFwd.z) / fwdLen) : SIMD2<Float>(0, -1)
+        let rightH = rightLen > 1e-4 ? (SIMD2<Float>(droneRight.x, droneRight.z) / rightLen) : SIMD2<Float>(1, 0)
+
+        // 1. In-flight hostile projectiles (crimson blips)
+        var nearestProjDist: Float = Float.greatestFiniteMagnitude
+        for proj in activeProjectiles {
+            let d = simd_length(proj.position - dronePos)
+            if d < nearestProjDist {
+                nearestProjDist = d
+            }
+        }
+
+        for proj in activeProjectiles {
+            let rel = SIMD2<Float>(proj.position.x - dronePos.x, proj.position.z - dronePos.z)
+            let dist = simd_length(rel)
+            let fwdDot = simd_dot(rel, fwdH)
+            let rightDot = simd_dot(rel, rightH)
+            let azimuth = atan2(rightDot, fwdDot)
+            let normDist = min(1.0, max(0.08, dist / maxRadarRange))
+            let isNearest = abs(dist - nearestProjDist) < 0.01
+
+            threats.append(GameState.RadarThreat(
+                id: UUID(),
+                azimuthRad: azimuth,
+                distanceNorm: normDist,
+                isProjectile: true,
+                isTagged: false,
+                isNearestThreat: isNearest
+            ))
+        }
+
+        // 2. Surrounding Ground NPCs / Targets (360° diorama awareness)
+        let npcs = npcsRoot.children.filter { $0.components.has(NPCComponent.self) }
+        let sortedNPCs = npcs.sorted {
+            simd_length($0.position(relativeTo: npcsRoot) - dronePos) < simd_length($1.position(relativeTo: npcsRoot) - dronePos)
+        }
+
+        for npc in sortedNPCs.prefix(6) {
+            let npcPos = npc.position(relativeTo: npcsRoot)
+            let rel = SIMD2<Float>(npcPos.x - dronePos.x, npcPos.z - dronePos.z)
+            let dist = simd_length(rel)
+            let fwdDot = simd_dot(rel, fwdH)
+            let rightDot = simd_dot(rel, rightH)
+            let azimuth = atan2(rightDot, fwdDot)
+            let normDist = min(1.0, max(0.12, dist / 0.45))
+            let isTagged = npc.components[TargetComponent.self]?.isTagged ?? false
+
+            threats.append(GameState.RadarThreat(
+                id: UUID(),
+                azimuthRad: azimuth,
+                distanceNorm: normDist,
+                isProjectile: false,
+                isTagged: isTagged,
+                isNearestThreat: false
+            ))
+        }
+
+        GameState.shared.radarThreats = threats
     }
 
     /// Retaliation triggered immediately when a fellow ant or citizen is struck on ANY level

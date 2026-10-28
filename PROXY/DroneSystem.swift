@@ -40,8 +40,8 @@ struct DroneSystem: System {
 
             // 2. Compute Target Horizontal Velocity
             var effectiveMaxSpeed = DRONE_MAX_HORIZONTAL_SPEED
-            if gameState.selectedTool == .boost && !gameState.isFuelEmpty {
-                effectiveMaxSpeed *= 1.6
+            if (gameState.isBoostActive || gameState.selectedTool == .boost) && !gameState.isFuelEmpty {
+                effectiveMaxSpeed *= (gameState.isBoostActive ? 2.2 : 1.6)
             }
             if gameState.isFuelEmpty {
                 effectiveMaxSpeed = 0 // Fuel depleted: drone stops horizontal drive

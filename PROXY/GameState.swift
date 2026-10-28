@@ -157,6 +157,56 @@ final class GameState {
         }
     }
 
+    // MARK: - 360° Tactical Radar Sensing
+    struct RadarThreat: Identifiable {
+        let id: UUID
+        let azimuthRad: Float      // Relative angle: 0 = boresight, +pi/2 = right, -pi/2 = left, pi = behind
+        let distanceNorm: Float    // 0.0...1.0 mapped to radar outer perimeter (0.40m range)
+        let isProjectile: Bool     // True for incoming attacks (SAMs, tracers, bio-acid, corks)
+        let isTagged: Bool         // For ground NPCs: true if neutralized
+        let isNearestThreat: Bool  // True for the highest priority incoming projectile
+    }
+
+    var radarThreats: [RadarThreat] = []
+    var activeThreatCount: Int { radarThreats.filter { $0.isProjectile }.count }
+    var hasIncomingHostile: Bool { activeThreatCount > 0 }
+
+    // MARK: - Tactical Evasive Countermeasure BOOST
+    var boostActiveTimer: Float = 0.0          // Countdown for active thruster surge (1.4s)
+    var isBoostActive: Bool { boostActiveTimer > 0 }
+    var boostDeflectionTimer: Float = 0.0      // Flash banner countdown on successful deflection
+    var boostDeflectionText: String = ""
+    var boostDeflectedCount: Int = 0
+
+    /// Engages tactical thruster surge: burns 15% fuel to engage kinetic shield & deflect incoming projectiles
+    @discardableResult
+    func triggerBoost() -> Bool {
+        guard !isConnectionLost else {
+            SessionLogger.shared.log("TACTICAL BOOST REJECTED: Drone connection offline", category: "COUNTERMEASURE")
+            return false
+        }
+        guard fuel >= 10.0 else {
+            radioMessage = "OPERATOR: ⚠ INSUFFICIENT FUEL FOR EVASIVE BOOST [\(Int(fuel))%] ⚠"
+            AudioServicesPlaySystemSound(1053) // Low fuel warning buzz
+            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            SessionLogger.shared.log("TACTICAL BOOST REJECTED: Insufficient fuel (\(Int(fuel))%)", category: "COUNTERMEASURE")
+            return false
+        }
+
+        // Consume 15% fuel
+        fuel = max(0, fuel - 15.0)
+        boostActiveTimer = 1.4
+
+        // Sound & Haptic FX
+        AudioServicesPlaySystemSound(1026) // Heavy thruster ignition / sonic blast
+        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+
+        radioMessage = "OPERATOR: ⚡ TACTICAL BOOST ENGAGED // KINETIC DEFLECTION ONLINE [1.4S] ⚡"
+        SnapshotStore.shared.captureAction(tag: "boost_engage")
+        SessionLogger.shared.log("TACTICAL BOOST ACTIVATED: Consumed 15% fuel (remaining: \(Int(fuel))%), 1.4s kinetic deflection shield deployed", category: "COUNTERMEASURE")
+        return true
+    }
+
     // MARK: - Ammunition & Ordnance System
     var ammo: Int = 8                    // Active rounds in magazine (e.g. 8 Hellfire / Micro-Strikes)
     var maxAmmo: Int = 8                 // Full magazine capacity
@@ -235,6 +285,9 @@ final class GameState {
         prestigeLevel = 0
         zoomFactor = 1.0
         targetsRemaining = targetsTotal
+        boostActiveTimer = 0
+        boostDeflectionTimer = 0
+        radarThreats.removeAll()
         updatePrestigeTheme()
     }
 

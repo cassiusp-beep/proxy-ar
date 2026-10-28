@@ -318,10 +318,20 @@ struct ARViewContainer: UIViewRepresentable {
             // Gather all active NPCs walking on the terrain
             let npcs = content?.npcs?.children.filter { $0.components.has(NPCComponent.self) } ?? []
 
-            // Update hostile counter-combat system (in-flight projectiles, retaliation)
+            // Update hostile counter-combat system (in-flight projectiles, retaliation, 360° radar threat sensing)
             if let npcsRoot = content?.npcs {
                 let camInContent = offsetEntity.convert(position: camPos, from: nil)
-                NPCCombatSystem.shared.update(dronePos: camInContent, npcsRoot: npcsRoot, dt: 1.0 / 60.0)
+                let camFwdInContent = offsetEntity.convert(direction: camFwd, from: nil)
+                let camRight = SIMD3<Float>(camTransform.columns.0.x, camTransform.columns.0.y, camTransform.columns.0.z)
+                let camRightInContent = offsetEntity.convert(direction: camRight, from: nil)
+
+                NPCCombatSystem.shared.update(
+                    dronePos: camInContent,
+                    droneFwd: camFwdInContent,
+                    droneRight: camRightInContent,
+                    npcsRoot: npcsRoot,
+                    dt: 1.0 / 60.0
+                )
             }
 
             struct Candidate {
@@ -516,7 +526,7 @@ struct ARViewContainer: UIViewRepresentable {
             let hasInput = abs(input.moveVector.x) > 0.04 || abs(input.moveVector.y) > 0.04
 
             if hasInput {
-                let speed: CGFloat = 260.0 // points per second across the screen
+                let speed: CGFloat = gameState.isBoostActive ? 520.0 : 260.0 // 2X snap-aiming speed during boost!
                 var newX = gameState.reticleOffset.x + CGFloat(input.moveVector.x) * speed * CGFloat(dt)
                 var newY = gameState.reticleOffset.y - CGFloat(input.moveVector.y) * speed * CGFloat(dt)
 
@@ -582,6 +592,12 @@ struct ARViewContainer: UIViewRepresentable {
             }
             if GameState.shared.droneDamageFlashTimer > 0 {
                 GameState.shared.droneDamageFlashTimer = max(0, GameState.shared.droneDamageFlashTimer - dt)
+            }
+            if GameState.shared.boostActiveTimer > 0 {
+                GameState.shared.boostActiveTimer = max(0, GameState.shared.boostActiveTimer - dt)
+            }
+            if GameState.shared.boostDeflectionTimer > 0 {
+                GameState.shared.boostDeflectionTimer = max(0, GameState.shared.boostDeflectionTimer - dt)
             }
         }
 
