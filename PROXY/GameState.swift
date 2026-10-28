@@ -32,11 +32,11 @@ final class GameState {
         UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
 
         if zoomFactor > 3.5 {
-            radioMessage = "OPERATOR: Synthetic Aperture 4.0X engaged. Sensor crop active."
+            radioMessage = "OPTICS 4.0X // TELEMETRY SYNCED"
         } else if zoomFactor > 1.5 {
-            radioMessage = "OPERATOR: Digital Sensor Crop 2.0X active. Precision grid synced."
+            radioMessage = "OPTICS 2.0X // PRECISION GRID"
         } else {
-            radioMessage = "OPERATOR: Wide-field 1.0X reconnaissance restored."
+            radioMessage = "OPTICS 1.0X // RECON RESTORED"
         }
 
         SessionLogger.shared.log("SYNTHETIC SENSOR ZOOM: switched magnification to \(zoomFactor)X", category: "OPTICS")
@@ -102,7 +102,7 @@ final class GameState {
     var targetsTotal: Int = 3
 
     // MARK: - Radio Mission Feed
-    var radioMessage: String = "OPERATOR: Reconnaissance active. Three targets identified in sector LOW."
+    var radioMessage: String = "CITADEL RECON // 3 TARGETS IN SECTOR LOW"
 
     var droneAltitudeMM: Float = 50.0    // Millimeters above terrain
     var droneHeadingDeg: Float = 0.0     // Compass heading degrees
@@ -261,16 +261,16 @@ final class GameState {
         switch prestigeLevel {
         case 0:
             currentMissionName = "OPERATION CITADEL"
-            radioMessage = "OPERATOR: Reconnaissance active. Three friendly targets identified in sector LOW."
+            radioMessage = "CITADEL RECON // 3 TARGETS IN SECTOR LOW"
         case 1:
             currentMissionName = "PEST CONTROL SWARM"
-            radioMessage = "OPERATOR: Bio-hazard infestation detected. Eradicate crop pests in sector 4."
+            radioMessage = "BIO-SWARM // PURGE PESTS IN SECTOR 4"
         case 2:
             currentMissionName = "SYNAPSE TACTICAL"
-            radioMessage = "OPERATOR: Visual recognition neural net active. 96% hostile combatant match."
+            radioMessage = "SYNAPSE NET // 96% HOSTILE MATCH"
         case 3:
             currentMissionName = "SILENT DAWN (FLIR)"
-            radioMessage = "OPERATOR: Strike cleared hot. Confirm bugsplat. Zero collateral."
+            radioMessage = "SILENT DAWN FLIR // STRIKE CLEARED HOT"
         default:
             break
         }

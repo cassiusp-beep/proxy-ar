@@ -746,3 +746,39 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun devicectl device 
   - Bound PlayStation `Square` (□ / buttonX) and `L1` (leftShoulder) to trigger `GameState.shared.triggerBoost()`.
 
 **Familiar or new:** new. Solves the player's core gameplay question by turning the radar and boost into an essential, visceral combat defense loop.
+
+## 044 · Mil-Tech HUD Anti-Slop Overhaul: layout resiliency, de-cluttering, and corner reticles
+*2026-10-27. Requested by user ("UI not good, what happened to my anti slop protocol..."); audited and implemented by specialist council (`game-designer`, `ios-builder`, `reviewer`, `device-runner`, `documenter`) in `HUDView.swift` and `GameState.swift`.*
+
+**Decision.**
+- **Problem Audit:**
+  - The HUD had degraded into visual "slop":
+    1. The bottom toolbar was collapsing horizontally, wrapping text vertically so `TAG [8] R2` broke into two lines and `BOOST` into three disjointed lines (`BO` / `OS -1 L` / `T 5% 1`).
+    2. A thick, artificial cyan rounded rectangle (`CurvedScreenBezelView`) boxed in the entire camera feed and cut awkwardly through the Dynamic Island.
+    3. Radio comms in the top bar clipped with an ugly ellipsis (`OPERATOR: Reconnaissance active. Three targets id...`).
+    4. The tactical radar was a squished square with overlapping corner text.
+    5. Right telemetry was scattered across multiple disjointed boxes.
+- **Anti-Slop Enforcement & Architectural Overhaul:**
+  - **1. Zero Text Wrapping in Tool Bar (`HUDView.swift`):**
+    - Enforced `.lineLimit(1)` and `.fixedSize(horizontal: true, vertical: false)` on every label, prompt, and badge in the tool bar.
+    - Decomposed `toolSlotButton` into modular sub-views (`toolSlotIcon`, `toolSlotBadge`, `toolSlotControllerPrompt`, `toolSlotButton`) and extracted `boostBadgeColor`, completely resolving Swift 5.10 type-checking timeouts.
+    - Set generous, balanced horizontal padding (36pt outer safe margin instead of 52pt) to give widgets optimal breathing room without colliding with the Dynamic Island.
+  - **2. Elimination of Cartoonish Outer Stroke (`CurvedScreenBezelView`):**
+    - Removed the continuous outer cyan rectangle that boxed in the camera view.
+    - Replaced with authentic Mil-Spec open corner brackets (`┌ ┐ └ ┘`) in the safe margin, maintaining an unobstructed, immersive camera feed.
+    - Retained smooth radial flash accents on damage impact and countermeasure surge.
+  - **3. Military Brevity Codes for Radio Comms (`GameState.swift`):**
+    - Replaced verbose narrative prose with concise, authentic military brevity codes:
+      - Mission 1: `CITADEL RECON // 3 TARGETS IN SECTOR LOW`
+      - Mission 2: `BIO-SWARM // PURGE PESTS IN SECTOR 4`
+      - Mission 3: `SYNAPSE NET // 96% HOSTILE MATCH`
+      - Mission 4: `SILENT DAWN FLIR // STRIKE CLEARED HOT`
+    - Comms now sit comfortably on a single line with zero truncation or text clipping.
+  - **4. Sleek 56×56 Circular Polar Radar (`tacticalRadarWidget`):**
+    - Rebuilt the radar as a compact 56×56 circular instrument with concentric 10M and 25M range rings, rotating sweep line, center boresight marker, and live 360° threat blips.
+    - Eliminated squished corner text.
+  - **5. Unified Right Telemetry Card (`rightTelemetry`):**
+    - Consolidated digital zoom level (`ZOOM`), shield integrity (`DEF`), and ordnance counter (`ORD`) into a single, cohesive mil-spec smoked glass telemetry card.
+
+**Familiar or new:** new. Strict adherence to the Anti-Slop Protocol (DECISION 030 / Mil-Tech Smoked Glass aesthetic), ensuring crisp typography, resilient layout geometry, and zero visual clutter.
+
