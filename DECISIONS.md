@@ -782,3 +782,36 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun devicectl device 
 
 **Familiar or new:** new. Strict adherence to the Anti-Slop Protocol (DECISION 030 / Mil-Tech Smoked Glass aesthetic), ensuring crisp typography, resilient layout geometry, and zero visual clutter.
 
+## 045 · iPhone 17 Pro Max Ultra-Wide (19.5:9) Dual-Wing Flight Deck Canvas Architecture
+*2026-10-27. Requested by user ("ask me questions to improve the UI, because you've smashed everything into a certain aspect ratio when the iphone 17 pro max has a lot more opportunity for design"); designed via structured requirements consultation and implemented by specialist council (`game-designer`, `ios-builder`, `reviewer`, `device-runner`, `documenter`) in `HUDView.swift`.*
+
+**Decision.**
+- **User Consultation & Architectural Direction:**
+  - The previous layout compressed elements inward with a standard 4:3 / 16:9 box mindset, failing to exploit the ultra-wide 19.5:9 canvas (~932×430 pt) of the physical iPhone 17 Pro Max.
+  - The user selected a **Dual-Wing Flight Deck** layout with **Mil-Spec Glass Cockpit** styling, **Ergonomic Thumb Wings**, and **Tactical Sensor Housing** around the Dynamic Island.
+- **Architectural Implementation (`HUDView.swift`):**
+  - **1. Central Diorama Corridor (Unobstructed ~550 pt Zone):**
+    - Removed all bottom bars, tool selectors, and bulky boxes from the center of the screen.
+    - The central ~60% of the display is now 100% open, giving the operator an immersive, crystal-clear line-of-sight to the physical AR diorama.
+    - Only the razor-sharp gimbal crosshair floats over the physical model.
+  - **2. Top Center Floating Navigation Ribbon:**
+    - `topCenterCompassBar`: Mil-Spec moving horizontal compass tape with graduated ticks, degree labels, and central boresight needle indicator.
+    - `missionBrevityCommsPill`: Smoked glass pill with animated audio waveform icon displaying typewriter brevity comms without clipping.
+  - **3. Left Flight-Deck Wing (Avionics & Sensor Suite):**
+    - `dynamicIslandSensorHousing`: Hardware-integrated sensor pod wrapping the Dynamic Island cutout with `FLIR 01`, `SIG: -42dBm`, and multi-segment RF signal bars.
+    - `AltHdgTelemetryBadge`: Altitude (`190MM`) and compass heading readout.
+    - `verticalAltitudeLadder`: Mil-Spec vertical altimeter and climb rate ladder tape (`V/S TAPE: +0.2 M/S`).
+    - `tacticalRadarWidget`: Sleek circular 360° polar threat radar with rotating sweep beam, range rings (`25M`), and directional projectile vectors.
+    - `ergonomicScanPod`: Bottom-left contoured thumb pod for `[SCAN (L2)]` with lidar echo frequency.
+  - **4. Right Defense-Deck Wing (Weapons & Defense Station):**
+    - Status Bar: Mission mode selector (`ARCADE` / `BIO` / `FLIR`), `[📸 HERO]` shutter button, and target counter `TGT [0/3]`.
+    - Score Badge: High-contrast `SCORE` pill.
+    - Optics Zoom Selector: `[OPTICS 1.0X / 2.0X / 4.0X]` with controller hint `○`.
+    - Defense & Ordnance Pod: Segmented 8-block defense shield health meter (`DEF 90%`) and quick-reload ordnance button (`ORD [8/8]`).
+    - Ergonomic Thumb Weapon Pods:
+      - `ergonomicTagPod`: Primary strike offensive weapon pod (`TAG / FIRE [8]`) with `R2` controller hint and lock acquisition indicator.
+      - `ergonomicBoostPod`: Evasive thruster surge / kinetic deflection shield (`BOOST [-15%]`) with `L1` hint and active deflection glow.
+
+**Familiar or new:** new. Maximizes the iPhone 17 Pro Max's ultra-wide canvas, eliminating clutter in the diorama center while putting flight instruments on the left wing and combat controls under the operator's thumbs.
+
+
