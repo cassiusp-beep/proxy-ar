@@ -852,4 +852,39 @@ The previous HUD suffered from sci-fi clichés: boxed cards, bordered panels, pi
 **Familiar or new:** new. Pure Scandinavian automotive instrument cluster aesthetic replacing generic sci-fi tropes.
 
 
+## 047 · Full Feature Conversion: Bottom Glass Shelf Controls, Dedicated Shield Meter, & Photo Shutter
+**Date:** 2026-10-28
+
+**Context:**
+Following user alignment, all core operational features from prior iterations were fully integrated into the Scandinavian Volvo glass windshield architecture without compromising its calm automotive aesthetic:
+- Missing controls (Optics Zoom, Boost/Deflection, Hero Photo Shutter, Tag/Fire)
+- Dedicated continuous Shield/Hull integrity status
+- Target counter & sector status
+- Hardware torch/flashlight muzzle strobe on trigger pull
+- Automatic 10-best action roll & manual hero photo capture
+
+**Key Architectural Changes:**
+1. **Dedicated Hull Shield Meter:**
+   - Integrated an 8-segment frosted glass shield meter directly beneath the left altitude readout in `EdgeArcGauge`.
+   - Displays exact continuous hull percentage (`100% → 0%`) and turns warning coral below 25%, providing permanent defense telemetry without relying on transient alert banners.
+2. **Top Sector Targets & Mission Telemetry Ribbon:**
+   - Grouped the heading scale, target counter (`TGT 0/3` or `★ SECTOR SECURE ★`), and single-line brevity comms into a unified frosted glass capsule at `y = 34pt`.
+3. **Bottom Glass Shelf Controls (User Selection A3):**
+   - **Left Shelf**:
+     - `Scan [L2]` (102×36pt)
+     - `Boost [L1]` (84×36pt) — triggers evasive kinetic deflection surge and reticle speed boost
+     - `Zoom [○]` (72×36pt) — cycles digital image magnification (`1.0X` / `2.0X` / `4.0X`)
+   - **Right Shelf**:
+     - `Photo [△]` (78×36pt) — manual Hero Action Photo capture with camera sound and screen flash
+     - `Tag [R2]` (102×36pt) — primary weapon discharge with hardware torch muzzle flash
+   - Center bottom corridor (~420pt) remains 100% open and unobstructed for diorama visibility.
+4. **Hardware Flashlight Strobe on Shoot:**
+   - Every tap on the on-screen `Tag` key or pull of the physical controller trigger (`R2` / `✕` / `□`) strobes the iPhone 17 Pro Max's rear LED flash for 70ms via `FlashlightController.shared.flash()`.
+5. **Hero Action Shutter:**
+   - Manual photo button triggers `SnapshotStore.shared.captureAction(tag: "manual_hero")`, camera shutter sound (`1108`), haptic recoil (`.heavy`), and a brief 0.1s white screen flash.
+
+**Familiar or new:** new. Complete integration of all combat, optical, photo, and sensor features into the Scandinavian Volvo HUD.
+
+
+
 

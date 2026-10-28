@@ -46,6 +46,7 @@ struct HUDView: View {
     @State private var prevTargetLocked: Bool = false
     @State private var prevDamageTimer: Float = 0
     @State private var prevDeflectionTimer: Float = 0
+    @State private var isPhotoFlashActive: Bool = false
 
     // Volvo Automotive Theme resolved against Prestige level
     private var theme: HUDTheme {
@@ -98,6 +99,14 @@ struct HUDView: View {
                         .animation(.easeOut(duration: 0.1), value: gameState.boostDeflectionTimer)
                 }
 
+                // Hero Shot Photo Camera Shutter Flash
+                if isPhotoFlashActive {
+                    Color.white.opacity(0.85)
+                        .ignoresSafeArea()
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                }
+
                 // Critical Connection Lost State
                 if gameState.isConnectionLost {
                     ZStack {
@@ -129,40 +138,58 @@ struct HUDView: View {
                     theme: theme
                 )
 
-                // 2. Top Edge: Windshield Curved Heading Scale
-                HeadingScale(
-                    headingDeg: gameState.droneHeadingDeg,
-                    theme: theme,
-                    viewWidth: w
-                )
-                .position(x: w / 2, y: 26)
+                // 2. Top Edge: Windshield Curved Heading Scale & Sector Status
+                VStack(spacing: 4) {
+                    HeadingScale(
+                        headingDeg: gameState.droneHeadingDeg,
+                        theme: theme,
+                        viewWidth: w
+                    )
 
-                // Mission Radio Text: Calm single-line HUD comms beneath heading
-                if !gameState.radioMessage.isEmpty {
-                    HStack(spacing: 5) {
-                        Image(systemName: "waveform")
-                            .font(.system(size: 8))
-                            .foregroundStyle(theme.accent)
-                        Text(gameState.radioMessage)
-                            .font(.system(size: 9.5, weight: .regular, design: .default))
-                            .foregroundStyle(theme.textSecondary)
-                            .lineLimit(1)
+                    // Sector Targets & Mission Telemetry Ribbon
+                    HStack(spacing: 8) {
+                        // Sector Target Counter
+                        HStack(spacing: 4) {
+                            Image(systemName: gameState.targetsRemaining == 0 ? "checkmark.circle.fill" : "target")
+                                .font(.system(size: 8.5, weight: .semibold))
+                                .foregroundStyle(gameState.targetsRemaining == 0 ? Color.green : theme.accent)
+                            Text(gameState.targetsRemaining == 0 ? "SECTOR SECURE" : "TGT \(gameState.targetsTotal - gameState.targetsRemaining)/\(gameState.targetsTotal)")
+                                .font(.system(size: 9.5, weight: .semibold, design: .rounded))
+                                .foregroundStyle(theme.text)
+                        }
+
+                        if !gameState.radioMessage.isEmpty {
+                            Circle()
+                                .fill(Color.white.opacity(0.25))
+                                .frame(width: 2.5, height: 2.5)
+
+                            // Mission Radio Text
+                            HStack(spacing: 4) {
+                                Image(systemName: "waveform")
+                                    .font(.system(size: 7.5))
+                                    .foregroundStyle(theme.accent)
+                                Text(gameState.radioMessage)
+                                    .font(.system(size: 9, weight: .regular, design: .default))
+                                    .foregroundStyle(theme.textSecondary)
+                                    .lineLimit(1)
+                            }
+                        }
                     }
                     .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
+                    .padding(.vertical, 3.5)
                     .background(.ultraThinMaterial, in: Capsule())
                     .overlay(Capsule().stroke(Color.white.opacity(0.12), lineWidth: 0.5))
-                    .position(x: w / 2, y: 58)
-                    .transition(.opacity)
                 }
+                .position(x: w / 2, y: 34)
 
-                // 3. Left Edge: Altitude Arc Gauge (Hugs Island cleanly on landscapeLeft)
+                // 3. Left Edge: Altitude Arc Gauge + Dedicated Shield Meter
                 EdgeArcGauge(
                     type: .altitude,
                     value: gameState.droneAltitudeMM,
                     maxValue: 400.0,
                     climbRate: altitudeClimbRate,
                     secondaryNumeral: 0,
+                    shield: gameState.droneShield,
                     ammo: gameState.ammo,
                     maxAmmo: gameState.maxAmmo,
                     hasIslandOnThisSide: isIslandOnLeft,
@@ -178,6 +205,7 @@ struct HUDView: View {
                     maxValue: 100.0,
                     climbRate: 0,
                     secondaryNumeral: gameState.score,
+                    shield: gameState.droneShield,
                     ammo: gameState.ammo,
                     maxAmmo: gameState.maxAmmo,
                     hasIslandOnThisSide: !isIslandOnLeft && geo.safeAreaInsets.trailing > 30,
@@ -208,33 +236,73 @@ struct HUDView: View {
                 .offset(x: gameState.reticleOffset.x, y: gameState.reticleOffset.y)
                 .position(x: w / 2, y: h / 2)
 
-                // 7. Bottom Corners: Two Sculpted Glass Keys (Scan L2 & Tag R2)
+                // 7. Bottom Corners: Glass Shelf Keys (Scan, Boost, Zoom on Left / Photo, Tag on Right)
                 VStack {
                     Spacer()
-                    HStack {
-                        CornerGlassKey(
-                            role: .scan,
-                            triggerHint: "L2",
-                            isSelected: gameState.selectedTool == .scan,
-                            theme: theme
-                        ) {
-                            gameState.selectedToolIndex = GameState.ToolSlot.scan.rawValue
+                    HStack(alignment: .bottom) {
+                        // Left Shelf: Scan, Boost & Zoom Keys
+                        HStack(spacing: 7) {
+                            CornerGlassKey(
+                                role: .scan,
+                                triggerHint: "L2",
+                                isSelected: gameState.selectedTool == .scan,
+                                zoomFactor: gameState.zoomFactor,
+                                theme: theme
+                            ) {
+                                gameState.selectedToolIndex = GameState.ToolSlot.scan.rawValue
+                            }
+
+                            CornerGlassKey(
+                                role: .boost,
+                                triggerHint: "L1",
+                                isSelected: gameState.isBoostActive || gameState.selectedTool == .boost,
+                                zoomFactor: gameState.zoomFactor,
+                                theme: theme
+                            ) {
+                                gameState.selectedToolIndex = GameState.ToolSlot.boost.rawValue
+                                _ = gameState.triggerBoost()
+                            }
+
+                            CornerGlassKey(
+                                role: .zoom,
+                                triggerHint: "○",
+                                isSelected: gameState.zoomFactor > 1.5,
+                                zoomFactor: gameState.zoomFactor,
+                                theme: theme
+                            ) {
+                                gameState.cycleZoom()
+                            }
                         }
                         .padding(.leading, isIslandOnLeft ? 52 : 32)
                         .padding(.bottom, 16)
 
                         Spacer()
 
-                        CornerGlassKey(
-                            role: .tag,
-                            triggerHint: "R2",
-                            isSelected: gameState.selectedTool == .tag,
-                            theme: theme
-                        ) {
-                            gameState.selectedToolIndex = GameState.ToolSlot.tag.rawValue
-                            GameInput.shared.tagTriggered = true
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                                GameInput.shared.tagTriggered = false
+                        // Right Shelf: Photo Shutter & Tag Primary Strike
+                        HStack(spacing: 7) {
+                            CornerGlassKey(
+                                role: .photo,
+                                triggerHint: "△",
+                                isSelected: false,
+                                zoomFactor: gameState.zoomFactor,
+                                theme: theme
+                            ) {
+                                triggerPhotoCapture()
+                            }
+
+                            CornerGlassKey(
+                                role: .tag,
+                                triggerHint: "R2",
+                                isSelected: gameState.selectedTool == .tag,
+                                zoomFactor: gameState.zoomFactor,
+                                theme: theme
+                            ) {
+                                gameState.selectedToolIndex = GameState.ToolSlot.tag.rawValue
+                                GameInput.shared.tagTriggered = true
+                                FlashlightController.shared.flash()
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                                    GameInput.shared.tagTriggered = false
+                                }
                             }
                         }
                         .padding(.trailing, !isIslandOnLeft && geo.safeAreaInsets.trailing > 30 ? 52 : 32)
@@ -286,6 +354,21 @@ struct HUDView: View {
         alertDismissWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0, execute: workItem)
     }
+
+    private func triggerPhotoCapture() {
+        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+        AudioServicesPlaySystemSound(1108) // Camera shutter sound
+        SnapshotStore.shared.captureAction(tag: "manual_hero")
+        withAnimation(.easeOut(duration: 0.08)) {
+            isPhotoFlashActive = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            withAnimation(.easeIn(duration: 0.18)) {
+                self.isPhotoFlashActive = false
+            }
+        }
+        triggerAlert(icon: "camera.fill", text: "Hero Shot Saved", isWarning: false)
+    }
 }
 
 // MARK: - Island Alert Data Model
@@ -310,6 +393,7 @@ struct EdgeArcGauge: View {
     let maxValue: Float
     let climbRate: Float
     let secondaryNumeral: Int
+    let shield: Float
     let ammo: Int
     let maxAmmo: Int
     let hasIslandOnThisSide: Bool
@@ -399,6 +483,28 @@ struct EdgeArcGauge: View {
                             .font(.system(size: 10, weight: .regular, design: .rounded))
                             .foregroundStyle(theme.textSecondary)
                     }
+
+                    // Dedicated Hull Shield Meter (Volvo Automotive Defense Arc / Segment Bar)
+                    HStack(spacing: 3) {
+                        Image(systemName: "shield.fill")
+                            .font(.system(size: 7.5))
+                            .foregroundStyle(shield < 25 ? theme.warning : theme.accent)
+
+                        HStack(spacing: 1.5) {
+                            ForEach(0..<8, id: \.self) { seg in
+                                let segThreshold = Float(seg + 1) * 12.5
+                                Rectangle()
+                                    .fill(shield >= segThreshold ? (shield < 25 ? theme.warning : theme.accent) : Color.white.opacity(0.12))
+                                    .frame(width: 3.5, height: 4.5)
+                                    .cornerRadius(1)
+                            }
+                        }
+
+                        Text("\(Int(shield))%")
+                            .font(.system(size: 8.5, weight: .regular, design: .rounded))
+                            .foregroundStyle(shield < 25 ? theme.warning : theme.textSecondary)
+                    }
+                    .padding(.top, 3)
                 } else {
                     // Right Arc: Companion Score Numeral + Glass Ordnance Dots
                     VStack(alignment: .trailing, spacing: 5) {
@@ -623,22 +729,31 @@ struct VolvoReticleView: View {
 struct CornerGlassKey: View {
     enum KeyRole {
         case scan
+        case boost
+        case zoom
+        case photo
         case tag
     }
 
     let role: KeyRole
     let triggerHint: String
     let isSelected: Bool
+    let zoomFactor: Float
     let theme: HUDTheme
     let action: () -> Void
 
     @State private var isTouchDepressed: Bool = false
 
     private var isPhysicalTriggerPulled: Bool {
-        if role == .scan {
+        switch role {
+        case .scan:
             return GameInput.shared.isL2Pressed
-        } else {
+        case .tag:
             return GameInput.shared.isR2Pressed
+        case .boost:
+            return GameInput.shared.isL1Pressed
+        case .zoom, .photo:
+            return false
         }
     }
 
@@ -646,32 +761,76 @@ struct CornerGlassKey: View {
         isTouchDepressed || isPhysicalTriggerPulled
     }
 
+    private var keyWidth: CGFloat {
+        switch role {
+        case .scan, .tag: return 102
+        case .boost: return 84
+        case .zoom: return 72
+        case .photo: return 78
+        }
+    }
+
     var body: some View {
         Button {
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             action()
         } label: {
-            HStack(spacing: 7) {
-                if role == .scan {
+            HStack(spacing: 5) {
+                switch role {
+                case .scan:
                     Image(systemName: "viewfinder")
                         .font(.system(size: 11, weight: .light))
                         .foregroundStyle(isSelected ? theme.accent : theme.textSecondary)
+                    Text("Scan")
+                        .font(.system(size: 12, weight: isSelected ? .medium : .regular, design: .default))
+                        .foregroundStyle(theme.text)
+                        .lineLimit(1).fixedSize()
+
+                case .boost:
+                    Image(systemName: "bolt.fill")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(isSelected ? theme.accent : theme.textSecondary)
+                    Text("Boost")
+                        .font(.system(size: 12, weight: isSelected ? .medium : .regular, design: .default))
+                        .foregroundStyle(theme.text)
+                        .lineLimit(1).fixedSize()
+
+                case .zoom:
+                    Image(systemName: "plus.magnifyingglass")
+                        .font(.system(size: 10, weight: .regular))
+                        .foregroundStyle(isSelected ? theme.accent : theme.textSecondary)
+                    Text(String(format: "%.0fX", zoomFactor))
+                        .font(.system(size: 12, weight: isSelected ? .semibold : .regular, design: .default))
+                        .foregroundStyle(theme.text)
+                        .lineLimit(1).fixedSize()
+
+                case .photo:
+                    Image(systemName: "camera.fill")
+                        .font(.system(size: 10, weight: .regular))
+                        .foregroundStyle(theme.accent)
+                    Text("Photo")
+                        .font(.system(size: 12, weight: .regular, design: .default))
+                        .foregroundStyle(theme.text)
+                        .lineLimit(1).fixedSize()
+
+                case .tag:
+                    Image(systemName: "target")
+                        .font(.system(size: 11, weight: .light))
+                        .foregroundStyle(isSelected ? theme.accent : theme.textSecondary)
+                    Text("Tag")
+                        .font(.system(size: 12, weight: isSelected ? .medium : .regular, design: .default))
+                        .foregroundStyle(theme.text)
+                        .lineLimit(1).fixedSize()
                 }
 
-                Text(role == .scan ? "Scan" : "Tag")
-                    .font(.system(size: 13, weight: isSelected ? .medium : .regular, design: .default))
-                    .foregroundStyle(theme.text)
-                    .lineLimit(1)
-                    .fixedSize()
-
-                Spacer(minLength: 4)
+                Spacer(minLength: 2)
 
                 // Etched Trigger Hint in Glass
                 Text(triggerHint)
-                    .font(.system(size: 9, weight: .regular, design: .monospaced))
-                    .foregroundStyle(theme.textSecondary.opacity(0.6))
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 1.5)
+                    .font(.system(size: 8.5, weight: .regular, design: .monospaced))
+                    .foregroundStyle(theme.textSecondary.opacity(0.65))
+                    .padding(.horizontal, 3.5)
+                    .padding(.vertical, 1)
                     .overlay(
                         RoundedRectangle(cornerRadius: 3)
                             .stroke(Color.white.opacity(0.18), lineWidth: 0.5)
@@ -680,13 +839,13 @@ struct CornerGlassKey: View {
                 if role == .tag {
                     Circle()
                         .fill(isSelected ? theme.accent : Color.white.opacity(0.20))
-                        .frame(width: 5, height: 5)
+                        .frame(width: 4.5, height: 4.5)
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .frame(width: 114, height: 38)
-            .windshieldGlass(cornerRadius: 18, isDepressed: isDepressed)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 7)
+            .frame(width: keyWidth, height: 36)
+            .windshieldGlass(cornerRadius: 16, isDepressed: isDepressed)
             .scaleEffect(isDepressed ? 0.96 : 1.0)
             .animation(.spring(response: 0.22, dampingFraction: 0.7), value: isDepressed)
         }

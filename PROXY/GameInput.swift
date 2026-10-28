@@ -23,6 +23,7 @@ final class GameInput {
     var tagTriggered: Bool = false
 
     /// Hardware trigger states for glass key depression animation
+    var isL1Pressed: Bool = false
     var isL2Pressed: Bool = false
     var isR2Pressed: Bool = false
 
@@ -218,7 +219,8 @@ final class GameInput {
         }
 
         // Left Shoulder [L1]: Tactical Evasive Boost / Countermeasure
-        gamepad.leftShoulder.pressedChangedHandler = { _, _, pressed in
+        gamepad.leftShoulder.pressedChangedHandler = { [weak self] _, _, pressed in
+            self?.isL1Pressed = pressed
             if pressed {
                 guard !GameState.shared.isConnectionLost else { return }
                 SessionLogger.shared.log("Controller L1 pressed: TACTICAL BOOST triggered", category: "INPUT")
