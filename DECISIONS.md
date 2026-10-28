@@ -702,3 +702,19 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun devicectl device 
   - Active via `devicectl device process launch --console`, streaming telemetry directly into `scratch/logs/session_live.log`.
 
 **Familiar or new:** new. Enables hands-free generation and automated harvesting of dramatic, presentation-grade action screenshots for demo pages and portfolios.
+
+## 042 · Full-frame digital image magnification without shrinking frame size
+*2026-10-27. Requested by user ("when I say for the zoom feature, I meant I want the image enlarged not changing the size of the frame"); implemented by specialist council (`game-designer`, `ios-builder`, `reviewer`, `device-runner`, `documenter`) in `ARViewContainer.swift` and `HUDView.swift`.*
+
+**Decision.**
+- **Full-Screen Digital Image Enlargement (`ARViewContainer.swift`):**
+  - Clarified design intent: the player wanted the *content image itself* digitally enlarged across the entire display, rather than an optical viewfinder crop box that shrank the visible frame into a small central rectangle.
+  - In `updateUIView`, animated `arView.transform` smoothly with `UIView.animate(withDuration: 0.22, options: .curveEaseOut)` to `CGAffineTransform(scaleX: zoom, y: zoom)`. The physical camera feed and 3D diorama enlarge 2.0x / 4.0x, filling the entire iPhone display edge-to-edge.
+  - Re-mapped targeting projection math: scaled 2D screen coordinates from center (`screenPt = center + (pt - center) * scale`) so that `screenDist` accurately matches the visually magnified targets on screen.
+  - Unscaled raycasting through `activeReticle` (`localPt = center + (reticle - center) / scale`) so weapon tracers and orbital strikes hit exactly where the crosshair points in magnified space.
+- **Full-Frame Digital Surveillance Overlays (`HUDView.swift`):**
+  - Completely eliminated the central shrinking crop box (`420×240` / `320×180` rectangle).
+  - Replaced with full-screen military digital surveillance aesthetics: full-display fine CRT horizontal raster scanlines, outer bezel framing telemetry (`[ DIGITAL MAGNIFICATION: 2.0X / 4.0X ]`, `PIXEL BINNING: 2×2 / 4×4`), and subtle peripheral vignette.
+
+**Familiar or new:** new. Provides authentic, cinematic full-screen digital surveillance magnification while maintaining pixel-perfect reticle aiming and diorama alignment.
+

@@ -27,10 +27,16 @@ struct ARViewContainer: UIViewRepresentable {
     func updateUIView(_ arView: ARView, context: Context) {
         // Reading these here registers them with Observation
         _ = GameState.shared.prestigeLevel
+        let zoom = GameState.shared.zoomFactor
 
-        // Pure natural ARView feed: no artificial camera warping/stretching
-        if arView.transform != .identity {
-            arView.transform = .identity
+        // Full-Screen Digital Image Enlargement (Entire frame stays full screen, image scales up)
+        let targetScale = CGFloat(zoom)
+        let currentTransform = arView.transform
+        let currentScale = sqrt(currentTransform.a * currentTransform.a + currentTransform.c * currentTransform.c)
+        if abs(currentScale - targetScale) > 0.02 {
+            UIView.animate(withDuration: 0.22, delay: 0, options: [.curveEaseOut, .beginFromCurrentState]) {
+                arView.transform = CGAffineTransform(scaleX: targetScale, y: targetScale)
+            }
         }
 
         context.coordinator.offsetEntity.transform = settings.transform
@@ -340,9 +346,12 @@ struct ARViewContainer: UIViewRepresentable {
 
                 var screenDist: CGFloat = 9999.0
                 if let pt = arView.project(worldPos) {
-                    let unzoomed = hypot(pt.x - activeReticle.x, pt.y - activeReticle.y)
-                    // Screen distance in unscaled reticle points
-                    screenDist = unzoomed
+                    let scale = CGFloat(gameState.zoomFactor)
+                    let screenPt = CGPoint(
+                        x: screenCenter.x + (pt.x - screenCenter.x) * scale,
+                        y: screenCenter.y + (pt.y - screenCenter.y) * scale
+                    )
+                    screenDist = hypot(screenPt.x - activeReticle.x, screenPt.y - activeReticle.y)
                 }
 
                 let targetComp = npc.components[TargetComponent.self]
@@ -480,7 +489,12 @@ struct ARViewContainer: UIViewRepresentable {
                         SessionLogger.shared.log("ASSISTED STRIKE: fired round (\(gameState.ammo)/\(gameState.maxAmmo)) at screenDist=\(Int(assistedTarget.screenDist))pt, rayDist=\(Int(assistedTarget.rayDist * 1000))mm [zoom=\(gameState.zoomFactor)X]", category: "RETICLE")
                     } else {
                         // Blank fire through active reticle into diorama space
-                        let ray = arView.ray(through: activeReticle)
+                        let scale = CGFloat(gameState.zoomFactor)
+                        let unscaledPoint = CGPoint(
+                            x: screenCenter.x + (activeReticle.x - screenCenter.x) / scale,
+                            y: screenCenter.y + (activeReticle.y - screenCenter.y) / scale
+                        )
+                        let ray = arView.ray(through: unscaledPoint)
                         let impactWorld = ray != nil ? ray!.origin + ray!.direction * 0.25 : (camPos + camFwd * 0.20)
                         let impactInContent = offsetEntity.convert(position: impactWorld, from: nil)
                         MissionSystem.spawnTracer(from: camInContent, to: impactInContent, in: offsetEntity)

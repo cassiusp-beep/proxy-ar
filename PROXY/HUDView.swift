@@ -590,65 +590,58 @@ struct HUDView: View {
         .shadow(color: Color.red.opacity(0.65), radius: 10, x: 0, y: 0)
     }
 
-    // Artificial Synthetic Sensor Crop Framing (Digital Surveillance Reconnaissance Mode)
+    // Full-Screen Digital Surveillance Enlargement Overlay (Frame remains full screen)
     private var syntheticSensorCropOverlay: some View {
-        ZStack {
-            // Surveillance CRT edge vignette
-            RadialGradient(
-                colors: [.clear, Color.black.opacity(gameState.zoomFactor > 3.0 ? 0.44 : 0.28)],
-                center: .center,
-                startRadius: 170,
-                endRadius: 440
-            )
-            .ignoresSafeArea()
-
-            // Outer Digital Framing Telemetry Brackets
-            VStack {
-                HStack {
-                    Text("┌ SYNTHETIC SENSOR CROP [\(String(format: "%.0fX", gameState.zoomFactor))] // DIGI-FOV \(gameState.zoomFactor > 3.0 ? "14°" : "28°")")
-                        .font(.system(size: 8, weight: .bold, design: .monospaced))
-                        .foregroundStyle(primaryColor)
-                    Spacer()
-                    Text("SENSOR MATRIX: 4096×2160 // GAIN: +12dB ┐")
-                        .font(.system(size: 8, weight: .bold, design: .monospaced))
-                        .foregroundStyle(primaryColor)
-                }
-                .padding(.horizontal, 64)
-                .padding(.top, 44)
-
-                Spacer()
-
-                HStack {
-                    Text("└ RESOLUTION ENHANCE: ON // IR-BAND: ACTIVE")
-                        .font(.system(size: 8, weight: .bold, design: .monospaced))
-                        .foregroundStyle(primaryColor)
-                    Spacer()
-                    Text("PRECISION SIGHTLINE: 0.25 MIL ┘")
-                        .font(.system(size: 8, weight: .bold, design: .monospaced))
-                        .foregroundStyle(primaryColor)
-                }
-                .padding(.horizontal, 64)
-                .padding(.bottom, 44)
-            }
-
-            // Central Artificial Sensor Crop Boundary Box with Cross-Rulers
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(
-                    primaryColor.opacity(0.55),
-                    style: StrokeStyle(lineWidth: 1.5, dash: [10, 6])
+        GeometryReader { geo in
+            ZStack {
+                // 1. Full-Screen Surveillance CRT edge vignette
+                RadialGradient(
+                    colors: [.clear, Color.black.opacity(gameState.zoomFactor > 3.0 ? 0.38 : 0.22)],
+                    center: .center,
+                    startRadius: 200,
+                    endRadius: 520
                 )
-                .frame(width: gameState.zoomFactor > 3.0 ? 320 : 420,
-                       height: gameState.zoomFactor > 3.0 ? 180 : 240)
-                .overlay(
-                    // Fine CRT horizontal scanlines across the cropped zone
-                    VStack(spacing: 6) {
-                        ForEach(0..<16, id: \.self) { _ in
-                            Rectangle()
-                                .fill(primaryColor.opacity(0.06))
-                                .frame(height: 1)
-                        }
+                .ignoresSafeArea()
+
+                // 2. Full-Screen Fine CRT Horizontal Raster Scanlines
+                VStack(spacing: 6) {
+                    ForEach(0..<Int(geo.size.height / 6.0), id: \.self) { _ in
+                        Rectangle()
+                            .fill(primaryColor.opacity(gameState.zoomFactor > 3.0 ? 0.05 : 0.03))
+                            .frame(height: 1)
                     }
-                )
+                }
+                .ignoresSafeArea()
+
+                // 3. Full-Screen Digital Surveillance Telemetry (Inset to match outer bezels)
+                VStack {
+                    HStack {
+                        Text("┌ DIGITAL MAGNIFICATION: \(String(format: "%.1fX", gameState.zoomFactor)) // SENSOR MATRIX: 4096×2160")
+                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .foregroundStyle(primaryColor)
+                        Spacer()
+                        Text("PIXEL BINNING: \(gameState.zoomFactor > 3.0 ? "4×4" : "2×2") // GAIN: +12dB ┐")
+                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .foregroundStyle(primaryColor)
+                    }
+                    .padding(.horizontal, 56)
+                    .padding(.top, 40)
+
+                    Spacer()
+
+                    HStack {
+                        Text("└ RESOLUTION ENHANCE: ACTIVE // DIGI-FOV: \(gameState.zoomFactor > 3.0 ? "14°" : "28°")")
+                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .foregroundStyle(primaryColor)
+                        Spacer()
+                        Text("PRECISION BORESIGHT: ACTIVE ┘")
+                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .foregroundStyle(primaryColor)
+                    }
+                    .padding(.horizontal, 56)
+                    .padding(.bottom, 40)
+                }
+            }
         }
         .allowsHitTesting(false)
         .animation(.spring(response: 0.28, dampingFraction: 0.8), value: gameState.zoomFactor)
