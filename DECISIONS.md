@@ -640,4 +640,26 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun devicectl device 
 
 **Familiar or new:** new. Delivers the raw tactical tension, distinct retro-military aesthetic, and authentic two-way combat requested by the user.
 
+## 039 · Custom bracketed smiley app icon, geometric optical centering, and universal 1024×1024 asset catalog integration
+*2026-10-27. Requested by user with uploaded reference artwork (`media_1793162156046.png`); implemented by specialist council (`game-designer`, `ios-builder`, `reviewer`, `device-runner`, `documenter`) in `PROXY/Assets.xcassets/AppIcon.appiconset`.*
+
+**Decision.**
+- **Geometry & Alignment Correction:**
+  - The reference artwork featured a distinctive cypherpunk / surveillance HUD glyph: outer bounding brackets `[ ]` with 45° chamfered outer corners, plus-sign eyes `+ +`, and an arc smile `‿`.
+  - The source upload had severe asymmetric margins: top margin 78px vs bottom 144px (shifted up 33px), and left margin 90px vs right 60px (shifted right 15px).
+  - Re-authored the icon as pure vector mathematics in a pristine 1024×1024 canvas:
+    - Symmetrical bounding box: exactly centered at `(512, 512)`.
+    - Horizontal brackets: 720pt wide × 570pt tall (152pt horizontal margin, 227pt vertical margin), safely inside Apple's continuous ~22.5% squircle corner mask.
+    - Outer chamfers: 45° 54pt diagonal bevels with rounded joins.
+    - Eyes: centered at `y = 448`, spaced `x = 372` and `x = 652` (`dx = 280`), each eye spanning 96×96pt with `.round` line caps.
+    - Smile: quadratic Bézier arc spanning `x = 352` to `x = 672` (`y = 582`), dipping gracefully to `y = 635` at center with `.round` line caps.
+    - Stroke weight: unified at 36pt (0.035 of canvas width), matching the bold visual presence of the original sketch.
+    - Color profile: pure `#000000` solid background (no alpha transparency per App Store guidelines) and high-luminance `#FFFFFF` glyph strokes in sRGB color space.
+- **Asset Catalog & Device Deployment:**
+  - Exported to `PROXY/Assets.xcassets/AppIcon.appiconset/AppIcon.png`.
+  - Configured `Contents.json` with the single universal 1024×1024 iOS idiom.
+  - Successfully compiled via Xcode 16 (`BUILD SUCCEEDED`) and deployed to connected physical iPhone 17 Pro Max (`00008150-000518D10130C01C`, sequence 5348).
+
+**Familiar or new:** new. Gives the PROXY app a signature, iconic presence on the iOS home screen matching its retro-futuristic drone surveillance aesthetic.
+
 
