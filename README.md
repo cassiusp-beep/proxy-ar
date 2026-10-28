@@ -4,6 +4,44 @@ The AR app for PROXY (DESINV 210, critical design). Through the phone, the gray 
 
 Why things are the way they are: [DECISIONS.md](DECISIONS.md). Debugging alignment: [docs/AR_ALIGNMENT_PLAYBOOK.md](docs/AR_ALIGNMENT_PLAYBOOK.md). Design verification: [UI_REVIEW.md](UI_REVIEW.md).
 
+---
+
+## Critical Design Framework: The Gamification of Remote Warfare
+
+**Course:** DESINV 210 (Simsarian Design Studio / Critical Design), UC Berkeley Master of Design (MDes)  
+**Author:** Cassius Palacio  
+**Tagline:** *"Log off. Stay on."*  
+**Emblem:** Smiling targeting reticle `[ + + ]`  
+
+### The Premise: Speculative Military Recruitment (2030)
+Set in the year 2030, **PROXY** is a speculative, gamified recruitment and operations ecosystem commissioned by the U.S. Air Force. Distributed as a polished, free-to-play mobile augmented reality title, players pilot an endearing reconnaissance drone over an idyllic cartoon diorama, scanning settlements and tagging targets for high scores, cosmetic unlocks, and leaderboard status.
+
+However, beneath the candy-colored aesthetic lies a chilling reality: **select high-tier missions are live, real-world drone strikes**. Top-performing civilian operators unknowingly execute remote kinetic strikes from their living rooms, insulated by game mechanics. Exceptional players are rewarded not with military medals, but with consumer-grade physical artifacts shipped directly to their doorsteps: the **PROXY Field Unit** (a motorized tangible shape display that physically actuates target topography out of thousands of tactile pins) and high-resolution 3D-printed **Trophies** of the sterilized strike zones.
+
+### Core Critical Arguments
+
+#### 1. The Cartoonization of Violence (Sanitized Lethality)
+First-person shooters and combat simulations have chased hyper-realism for decades. PROXY argues that the ultimate stage of military gamification is not graphic fidelity, but **complete visual sanitization**. When real-world killing is distributed to consumer smartphones, it will never show blood, rubble, or human agony—nobody would play it. Instead, reality is disguised as a delightful, low-poly cartoon. The cel-shaded palette, friendly UI micro-animations, and celebratory fanfare transform lethal state violence into pure play.
+
+#### 2. The Dichotomy of Truth vs. Screen: Atoms vs. Bits
+A fundamental design thesis of PROXY is that **the physical world tells the truth, while the digital screen tells a comfortable lie**:
+- **Atoms (The Physical Table):** The tangible pin model (`pins_block.stl` / Field Unit) is cold, unadorned, gray, and silent. It represents the unvarnished physical substrate of the target environment.
+- **Bits (The Phone Windshield):** The moment the player looks through the iPhone screen, RealityKit overlays vibrant architectural resin buildings, animated townspeople, and lush green terraces. The game only functions as long as the user stays glued to the screen. To lower the phone is to confront the stark, inanimate gray truth of what is being targeted.
+
+#### 3. Moral Drift: The Prestige System as Dehumanization Pipeline
+In modern drone warfare, operators historically described human casualties using dehumanizing terminology such as *"bugsplats"*. PROXY operationalizes this psychological transition through its **Prestige System**, which players navigate via the controller D-Pad or HUD telemetry:
+- **Prestige 0 (Operation Citadel):** Innocent arcade bliss. Cheerful pastel figures, bright pink lock rings, celebratory confetti bursts, and upbeat chimes (`+500 RECON POINTS`).
+- **Prestige 1 (Pest Control Swarm):** The smiling citizens mutate into swarming black and brown garden ants with articulated chitin and twitching limbs. Strike impacts trigger viscous lime-green splatters on the terrain (`"PEST ELIMINATED! +250 PEST CREDITS"`), conditioning the player to view living beings as vermin requiring extermination.
+- **Prestige 2 (Synapse Tactical):** The game sheds its cheerful exterior for an austere military tactical interface, replacing playful feedback with numeric target threat confidence ratings.
+- **Prestige 3 (Silent Dawn / FLIR Thermal):** The final psychological state. The diorama is drained of all color, collapsing into a grim, high-contrast monochrome thermal view. Targets become uniform white-hot heat signatures on cold black terrain. Strikes are executed in chilling silence (`"BUGSPLAT RECORDED. CONFIRMED IMPACT · 0 COLLATERAL"`). The transformation from civilian gamer to detached state executioner is complete.
+
+#### 4. The Tactile Ritual of Remote Execution
+The interaction design pairs the iPhone 17 Pro Max with a physical **Backbone One PlayStation® Edition** controller and the **Field Unit Sync Dock**:
+- **The Sync Ritual:** The phone rests in the recessed pocket of the Field Unit, implying recharging and data sync. Lifting the controller-cradled phone engages the camera, aligns to printed fiducials, and snaps the virtual diorama onto the table.
+- **Haptic Dissociation:** Pulling the physical trigger (`R2` / `✕`) unleashes a blinding orbital strike ray and heavy tactile impact rumble (`UIImpactFeedbackGenerator(style: .heavy)`), creating a visceral sensory loop that rewards destructive precision while divorcing the player from real-world consequences.
+
+---
+
 ## Live Gameplay & AR HUD
 
 Captured on physical iPhone 17 Pro Max in landscape with the Backbone One PlayStation® Edition controller:
