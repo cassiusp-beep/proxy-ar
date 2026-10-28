@@ -52,6 +52,11 @@ struct DebugPanel: View {
                                 GameState.shared.fuel = 100
                             }
                             .buttonStyle(.bordered)
+
+                            Button("Test Hit") {
+                                GameState.shared.damageDrone(amount: 15)
+                            }
+                            .buttonStyle(.bordered)
                         }
 
                         // Volvo HUD Theme Preset Picker

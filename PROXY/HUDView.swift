@@ -59,6 +59,69 @@ struct HUDView: View {
             let isIslandOnLeft = geo.safeAreaInsets.leading > 30
 
             ZStack {
+                // 0. Full-Screen Red Impact Flash & Perimeter Strobe
+                if gameState.droneDamageFlashTimer > 0 {
+                    let intensity = Double(min(gameState.droneDamageFlashTimer / 0.35, 1.0))
+                    ZStack {
+                        // Edge-focused crimson impact vignette
+                        RadialGradient(
+                            gradient: Gradient(colors: [
+                                Color.red.opacity(0.0),
+                                Color.red.opacity(0.28 * intensity),
+                                Color.red.opacity(0.70 * intensity)
+                            ]),
+                            center: .center,
+                            startRadius: min(w, h) * 0.18,
+                            endRadius: max(w, h) * 0.75
+                        )
+
+                        // Outer windshield perimeter red impact glow
+                        RoundedRectangle(cornerRadius: gameState.cornerRadiusSetting, style: .continuous)
+                            .strokeBorder(Color.red.opacity(0.90 * intensity), lineWidth: 4.5)
+                            .padding(4)
+                            .shadow(color: Color.red.opacity(0.95 * intensity), radius: 18)
+                    }
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+                    .animation(.easeOut(duration: 0.1), value: gameState.droneDamageFlashTimer)
+                }
+
+                // Kinetic Deflection Shield Pulse
+                if gameState.boostDeflectionTimer > 0 {
+                    let intensity = Double(min(gameState.boostDeflectionTimer / 0.40, 1.0))
+                    RoundedRectangle(cornerRadius: gameState.cornerRadiusSetting, style: .continuous)
+                        .strokeBorder(theme.accent.opacity(0.85 * intensity), lineWidth: 3.5)
+                        .padding(4)
+                        .shadow(color: theme.accent.opacity(0.90 * intensity), radius: 14)
+                        .ignoresSafeArea()
+                        .allowsHitTesting(false)
+                        .animation(.easeOut(duration: 0.1), value: gameState.boostDeflectionTimer)
+                }
+
+                // Critical Connection Lost State
+                if gameState.isConnectionLost {
+                    ZStack {
+                        Color.black.opacity(0.40)
+                        VStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 26, weight: .bold))
+                                .foregroundStyle(theme.warning)
+                            Text("HULL BREACH // RECONNECTING")
+                                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                .foregroundStyle(theme.text)
+                            Text(String(format: "RESTORING TELEMETRY (%.1fs)", gameState.connectionLostCountdown))
+                                .font(.system(size: 10, weight: .regular, design: .rounded))
+                                .foregroundStyle(theme.textSecondary)
+                        }
+                        .padding(.horizontal, 22)
+                        .padding(.vertical, 14)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(theme.warning.opacity(0.4), lineWidth: 1))
+                    }
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+                }
+
                 // 1. Off-Screen Perimeter Target Chevrons
                 EdgeTargetChevrons(
                     threats: gameState.radarThreats,
