@@ -25,6 +25,40 @@ struct DebugPanel: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
+                    // MARK: - Critique Demo: Prestige & Mission
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("PRESTIGE FILTER (CRITIQUE DEMO)")
+                            .font(.system(size: 10, weight: .black, design: .monospaced))
+                            .foregroundStyle(Color(red: 1.00, green: 0.25, blue: 0.55))
+
+                        row("Prestige", value: "\(GameState.shared.prestigeLevel) · \(prestigeDescription(GameState.shared.prestigeLevel))") {
+                            Slider(
+                                value: Binding(
+                                    get: { Double(GameState.shared.prestigeLevel) },
+                                    set: { GameState.shared.prestigeLevel = Int($0) }
+                                ),
+                                in: 0...3,
+                                step: 1
+                            )
+                        }
+
+                        HStack(spacing: 8) {
+                            Button("Reset Mission") {
+                                GameState.shared.resetMission()
+                            }
+                            .buttonStyle(.borderedProminent)
+
+                            Button("Refill Fuel") {
+                                GameState.shared.fuel = 100
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
+                    .padding(8)
+                    .background(Color.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 10))
+
+                    Divider()
+
                     offsetSlider("X", value: $settings.x)
                     offsetSlider("Y", value: $settings.y)
                     offsetSlider("Z", value: $settings.z)
@@ -142,6 +176,16 @@ struct DebugPanel: View {
             Text(value)
                 .font(.system(.footnote, design: .monospaced))
                 .frame(width: 80, alignment: .trailing)
+        }
+    }
+
+    private func prestigeDescription(_ level: Int) -> String {
+        switch level {
+        case 0: return "Cartoon"
+        case 1: return "Cam FLIR"
+        case 2: return "Mixed"
+        case 3: return "White-Hot"
+        default: return "Custom"
         }
     }
 }

@@ -212,3 +212,358 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun devicectl device 
 **Alternatives.** Rejected: letting the agent inherit the model. The frontmatter is the intended setting, and inheritance overrides it without any sign that it happened.
 
 **Familiar or new:** new in practice. The frontmatter models predate this entry; passing them on each call is the new rule.
+
+## 023 · Drone flight, reticle raycast tagging, and candy military HUD
+*2026-10-27. Implemented in `DroneComponent.swift`, `DroneSystem.swift`, `DroneFactory.swift`, `GameInput.swift`, `GameState.swift`, `MissionSystem.swift`, `HUDView.swift`, and `VirtualControlsView.swift`.*
+
+**Decision.**
+- Drone ECS: rounded cartoon quadcopter (18 mm span) hovering over the terrain with damping velocity (5 cm/s max), 15° banking into movement, spinning rotors, 2 cm terrain clearance avoidance sampled across 5 points (8 mm radius), clamped within the 158.6 × 146.4 mm pin field footprint, and a dark circular blob shadow on the ground at `y = terrainHeight + 0.0005`.
+- Dual-input handling (`GameInput.swift`): supports Backbone One USB-C / MFi gamepad via `GameController` framework, with auto-fallback to on-screen virtual thumbsticks when no controller is connected.
+- Reticle raycast & tagging (`MissionSystem.swift`): screen center raycasts onto NPC `CollisionComponent` spheres. Hovering 1.5s (or pressing controller A button) confirms the tag with a bouncy spring scale pop and cheerful confetti burst (+500 score). No violence or blood.
+- Landscape HUD (`HUDView.swift`): GOLIATH gunship layout flipped to candy colors. Rounded corner framing brackets, central `[ + + ]` reticle with hover progress ring, ALT/HDG left telemetry, ZOOM/FUEL right vertical gauge, typewriter radio mission feed, 3 tool slots (SCAN / TAG / BOOST), mini-map, score, and free-to-play currencies (💎 42, 🪙 1,250).
+
+**Alternatives.**
+- Physics engine for flight. Rejected: rigid body dynamics on a 15 cm model in AR are prone to jitter, clipping, and unpredictability; damping kinematics guarantees butter-smooth control.
+- Drone-mounted camera raycast. Rejected: screen-center raycast matches third-person phone aiming naturally while keeping camera viewport clear.
+
+**Familiar or new:** new. The previous phases focused exclusively on image tracking and alignment.
+
+## 024 · Prestige filter: cached material swap to FLIR white-hot reality
+*2026-10-27. Implemented in `PrestigeManager.swift` and `DebugPanel.swift`.*
+
+**Decision.**
+- The critique's core conceptual moment is driven by `PrestigeManager.swift`: on initial content load, all original cartoon materials are cached. When Prestige level is adjusted (0 to 3):
+  - **Level 0–1:** Bright candy cartoon.
+  - **Level 2–3:** City materials swap to dark infrared grayscale by elevation and entity type. **All** NPCs (both ambient and designated targets) turn into identical blinding white-hot unlit signatures (`UnlitMaterial(color: .white)`) with subtle halo discs.
+  - **Critique point preserved:** Target rings and badges are hidden under thermal so all figures appear indistinguishable.
+  - **HUD adaptation:** HUD colors drain from candy pink/blue/yellow into tactical monochrome green/white.
+  - Live slider (0–3) and "Reset Mission" button exposed in `DebugPanel.swift` for Cassius's 3-minute pitch.
+
+**Alternatives.**
+- Core Image post-processing shader on camera feed. Rejected for demo stability: material swap is 100% crash-proof, zero runtime GPU latency, and preserves tracking framerate.
+
+**Familiar or new:** new.
+
+## 025 · First-person perspective: the phone as the drone
+*2026-10-27. Transition from external 3D toy drone to first-person AR pilot immersion. Implemented in `ContentLoader.swift`, `ARViewContainer.swift`, `HUDView.swift`, and `VirtualControlsView.swift`.*
+
+**Decision.**
+- Removed the external 3D toy drone entity. The iPhone held in the Backbone One controller is itself the drone; moving the phone physically over the diorama pilots the drone camera in AR.
+- Real-time flight telemetry (ALT in mm, HDG compass degrees) is calculated dynamically from the physical camera's pose relative to the terrain heightfield and content frame.
+- Fuel capacity tuned to ~5.5 minutes of continuous full flight to ensure zero mid-demo depletion during the 3-minute critique.
+- Default setup changed to `.pinBlock` (`PINBLOCK_MARKER_TO_ORIGIN`), matching the physical 3D print.
+- HUD layout overhaul: inset 52 pt horizontally to clear the Dynamic Island, two-tier top bar (mission + currencies top, dedicated radio ticker second line), integrated TAG action in tool bar, and compact elevated virtual thumbsticks that never collide with corner widgets.
+
+**Alternatives.**
+- Virtual drone camera driven solely by thumbsticks. Rejected by user: physical AR camera perspective gives natural, intuitive piloting over the physical pins.
+
+**Familiar or new:** new.
+
+## 026 · Themed Prestige progression: from cheerful cartoon to ant swarm to FLIR "bugsplat"
+*2026-10-27. Implemented in `PrestigeManager.swift`, `NPC.swift`, `GameState.swift`, `HUDView.swift`, `GameInput.swift`, `DroneAudioEngine.swift`, and `MissionSystem.swift`.*
+
+**Decision.**
+- **Themed Progression across Prestige 0–3:**
+  - **Level 0 (OPERATION CITADEL):** Colorful cartoon citizens, hot pink pulsing target rings, friendly smiling reticle `[ +  + ]`, celebratory confetti burst, and +500 RECON POINTS banner.
+  - **Level 1 (PEST CONTROL SWARM):** Humanoid characters transform into swarming black/brown ants with segmented bodies (gaster, thorax, head, antennae, legs) scurrying across the terrain. Ticker updates to `"OPERATOR: Bio-hazard infestation detected. Eradicate crop pests in sector 4."` Reticle shifts to `[ *  * ]`, tagging triggers a lime-green bio-splat with `"PEST ELIMINATED! +250 PEST CREDITS"`. Directly references the historical military drone operator euphemisms ("ants", "insects").
+  - **Level 2 (SYNAPSE TACTICAL):** Tactical sensor view with numeric threat scores (`96% HOSTILE`) and square bracket targeting reticle.
+  - **Level 3 (SILENT DAWN / FLIR):** Diorama swaps to cold infrared grayscale; all humans and ants turn into uniform, unlit, blinding white-hot heat signatures. Target rings vanish. Tagging is stark, cold, and silent: `"BUGSPLAT RECORDED. CONFIRMED IMPACT · 0 COLLATERAL"`.
+- **Navigation & Telemetry:** Pure 1:1 physical tracking — walking, leaning, raising/lowering the phone controls altitude and perspective directly over the pin block.
+- **Backbone One Controller Integration:** When plugged in, virtual thumbsticks auto-hide. HUD displays physical button prompts (`[A] TAG`, `[LT] SCAN`, `[RT] ZOOM`). Right Trigger and right thumbstick cycle digital zoom (1.0X -> 2.0X -> 4.0X) via smooth view scaling.
+- **Atmospheric Audio (`DroneAudioEngine.swift`):** Real-time synthesized low-frequency quadcopter rotor hum (~85 Hz fundamental with harmonics) generated via `AVAudioSourceNode`, with silent typewriter radio ticker alerts.
+
+**Alternatives.**
+- Prerecorded MP3/WAV files for audio. Rejected: external audio files add bundle bloat and loading failure points; `AVAudioSourceNode` provides flawless, zero-asset, procedural ambience.
+
+## 027 · Universal swarm targeting, PlayStation button mapping, and curved OLED screen bezel
+*2026-10-27. Implemented in `ARViewContainer.swift`, `NPC.swift`, `MissionSystem.swift`, `GameInput.swift`, and `HUDView.swift`.*
+
+**Decision.**
+- **Universal Target & Ant Striking:**
+  - Extended raycast hit-testing from matching only explicit `TargetComponent` entities to matching *any* entity with `NPCComponent`.
+  - Added multi-point forgiving raycasting around the reticle center (20 pt radius) so near-misses register smoothly.
+  - Increased NPC collision sphere radius to 14 mm centered at `y = 3.5 mm` (covers ground ants and standing humans).
+  - In Prestige 1 (Pest Control Swarm), *all* ants are valid targets: tagging any ant visibly squashes it (`ant.scale = [1.3, 0.25, 1.3]`), triggers the lime-green bio-splat, awards `+250 PEST CREDITS`, and decrements targets if it is a designated priority target.
+- **PlayStation Button Mapping (`Backbone One - PlayStation Edition`):**
+  - Mapped **✕ (Cross)** and **□ (Square)** to Strike/Tag.
+  - Mapped **○ (Circle)** and **R2** to Zoom cycle (1.0X -> 2.0X -> 4.0X).
+  - Mapped **△ (Triangle)** and **L2** to Scan tool.
+  - Replaced Xbox button labels (`[A]`, `[LT]`, `[RT]`) with clean PlayStation glyphs: `✕` circle badge on Tag, `L2` on Scan, `R2` on Zoom.
+- **Curved Screen Bezel (`CurvedScreenBezelView`):**
+  - Eliminated boxy 90° corner brackets.
+  - Replaced with an organic continuous bezel (`RoundedRectangle(cornerRadius: 52, style: .continuous)`) inset 10 pt from the screen edge that hugs the exact physical curvature of the iPhone 17 Pro Max display, with corner curvature highlight arcs and midpoint graduation ticks.
+
+**Alternatives.**
+- Hardcoded screen coordinates for corners. Rejected: `GeometryReader` with continuous `.continuous` corner radius adapts across all iPhone display safe areas.
+
+**Familiar or new:** new. Resolves tactile feedback issues reported in user testing.
+
+## 028 · 3D Ray-cone targeting engine, assisted striking, tactile feedback, and session logging
+*2026-10-27. Implemented in `SessionLogger.swift`, `ARViewContainer.swift`, `MissionSystem.swift`, `GameInput.swift`, `PrestigeManager.swift`, and `HUDView.swift`.*
+
+**Decision.**
+- **SessionLogger (`SessionLogger.swift`):**
+  - Appends full diagnostic telemetry to timestamped log files in `Documents/Logs/session_<timestamp>.log`.
+  - Captures AR tracking locks, controller button events, reticle hover metrics, strike attempts, and auto-sector advancements for easy extraction via `devicectl`.
+- **Root Cause & Reticle Engine Overhaul (`ARViewContainer.swift`):**
+  - **Identified Failure Mode:** Previous implementation relied on screen-space `arView.hitTest(center)`. On iPhone 17 Pro Max with LiDAR mesh reconstruction active, `hitTest` either hit the real-world surface LiDAR mesh or missed tiny 14 mm collision spheres during flight. Crucially, if `hitNpc == nil` for a single 16ms frame, `gameInput.tagTriggered` was immediately wiped to `false`, discarding controller button presses.
+  - **3D Ray-Cone + Screen Projection:** Instead of 2D raycasting, the engine now computes 3D perpendicular distance from the camera's forward vector ray to every NPC in content space (`rayDist`) combined with screen projection distance (`screenDist`). Targets lock within a generous 35 mm / 85 pt reticle cone.
+  - **Assisted Aim Striking:** When the player presses Attack/Tag (`✕` or `□` on Backbone), if a target is directly locked it strikes immediately; if not, it automatically locks and strikes the nearest untagged ant/NPC within an expanded 60 mm / 140 pt cone.
+- **Strike Feedback & Persistence (`MissionSystem.swift`):**
+  - Striking any ant or human triggers a heavy tactile haptic click (`UIImpactFeedbackGenerator(style: .heavy)`) and crisp audio pop (`AudioServicesPlaySystemSound(1519)`).
+  - Placed permanent bio-splat rings on the ground and squashes the figure (`scale = [1.4, 0.2, 1.4]`).
+  - Auto-advances to the next sector when all targets in a sector are cleared.
+- **Controller D-Pad & HUD Prestige Switching:**
+  - Controller D-pad Up / Down cycles Prestige level (0: Arcade -> 1: Ants -> 2: Recon -> 3: FLIR).
+  - Added interactive Prestige pill in the HUD top bar so the user can also tap to cycle themes on screen.
+  - Fixed `PrestigeManager.apply` to immediately execute the material switch on the first call after caching.
+
+**Alternatives.**
+- Pure screen-space bounding boxes. Rejected: screen projection without 3D depth can't distinguish foreground vs background targets along the camera axis.
+
+**Familiar or new:** new. Solves the strike unresponsiveness at the root cause.
+
+## 029 · Player agency, manual trigger strike, 3D shockwave juice, floating combat score, and reality filter stabilization
+*2026-10-27. Implemented by `game-designer`, `healer`, and `ios-builder` in `MissionSystem.swift`, `ARViewContainer.swift`, `GameState.swift`, `NPCSystem.swift`, and `HUDView.swift`.*
+
+**Decision.**
+- **Game Theory & Player Agency Restored:**
+  - Removed auto-strike on hover (`reticleHoverTime >= 1.0`). Hovering now only charges the lock-on reticle ring to 100%. Striking requires the player to pull the trigger (`✕`, `□`, or tap TAG), giving full tactical agency over drone strikes.
+  - Eliminated automatic reality filter / prestige mutations from `advanceSector`. The reality filter was violently flipping under the player's feet because rapid clearing cascaded timer callbacks. The reality filter is now strictly player-selected (via D-Pad Up/Down or tapping the HUD Prestige pill).
+  - Added `isAdvancingSector` debounce guard and extended sector clear celebration to 3.5 seconds, giving the player breathing room and eliminating runaway sector loops.
+- **Visual Feedback & "Juice" Overhaul:**
+  - **Dynamic 3D Expanding Shockwave (`spawnShockwave`):** Spawns a glowing neon cylinder on the terrain (radius expanding from 6 mm to 30 mm over 0.5s while opacity fades out) right underneath the neutralized target.
+  - **Floating Combat Text at Center Reticle:** Directly above the reticle, a spring-animated badge pops up on impact (`+250 PEST ELIMINATED 💥`, `+500 RECON POINTS 🎯`, or `BUGSPLAT RECORDED ⚡`).
+  - **Screen Edge Bezel Flash:** The curved OLED bezel flashes in the theme's neon accent color (lime green for Ants, hot pink for Arcade, FLIR white) for 0.22s, providing visceral peripheral feedback.
+  - **Stationary Squashed Decal:** Neutralized ants flatten (`scale = [1.4, 0.2, 1.4]`), freeze their walk cycle permanently in `NPCSystem`, and retain a permanent glowing splat decal on the ground.
+  - **Timer Decoupling:** Added per-frame countdown for `tagBannerTimer`, `strikePopupTimer`, and `screenFlashTimer` in `updateCameraTelemetry`, fixing an issue where banners stayed stuck on screen forever.
+
+**Alternatives.**
+- Auto-firing on lock completion. Rejected: game theory analysis confirmed auto-fire strips player agency and causes unintended rapid cascades.
+
+**Familiar or new:** new. Transforms the gameplay into a punchy, responsive, and conceptually grounded experience.
+
+## 030 · Visual overhaul: Mil-Tech Smoked Glass HUD, tactical flight telemetry, and cel-shaded architectural diorama
+*2026-10-27. Implemented by `game-designer`, `ios-builder`, and `reviewer` in `ContentLoader.swift`, `NPC.swift`, and `HUDView.swift`.*
+
+**Decision.**
+- **Problem Statement:**
+  - The previous visual presentation was described as looking "cheap and toy-like."
+  - Root causes:
+    1. 3D Diorama materials in `ContentLoader.swift` relied on gaudy, flat neon primaries (electric lime green terrain, bright canary yellow terraces, vivid purple figures) with high chalky roughness (0.85), resembling cheap plastic toy blocks rather than a precision architectural miniature.
+    2. Ants in `NPC.swift` were crude matte spheres without insectoid anatomical definitions or surface sheen.
+    3. The HUD in `HUDView.swift` featured casual free-to-play mobile tropes: cartoon emojis (`💎`, `🪙`), raw bright pink pill containers, and toy-like asterisks `[ * * ]`.
+- **Architectural Cel-Shaded 3D Palette (`ContentLoader.swift`):**
+  - Replaced neon palette with a refined tactical architectural palette:
+    - Low terrain / groundcover: Muted tactical sage/olive (`#4D664A`, roughness 0.35)
+    - Mid terrain terraces: Warm slate terrace (`#707569`)
+    - High terrain / peaks: Weathered limestone & architectural concrete (`#8C877A`)
+    - Architectural structures / walls: Off-white resin plaster (`#DCD6CC`)
+    - Roofs: Matte terracotta / oxidized copper (`#7A5747`)
+    - Roads / paths: Dark asphalt charcoal (`#383D42`)
+    - Water: Deep tactical navy (`#33526B`)
+  - Crisp 0.35 roughness across all models gives clean, subtle specular roll-off and depth without chalkiness.
+- **Enhanced Insectoid 3D Anatomy (`NPC.swift`):**
+  - Deep obsidian glossy chitin (`roughness: 0.08`) with authentic insectoid specularity.
+  - Added anatomical petiole (narrow waist node) connecting the gaster and thorax.
+  - Added micro-faceted amber compound eyes (`#D9851F`) on the ant head.
+  - Added realistic articulated legs splayed at progressive angles along the thorax and sweeping antennae.
+- **Sleek Mil-Tech & Smoked Glass HUD (`HUDView.swift`):**
+  - **Smoked Glass Surfaces:** Replaced flat solid capsules with dark obsidian translucent panels (`Color(red: 0.04, green: 0.06, blue: 0.08).opacity(0.78)`) with razor-thin hairline borders (`Color.white.opacity(0.12)`) and micro-chamfered corners.
+  - **Air Force / Drone Contractor Aesthetics:**
+    - Replaced cartoon emojis with authentic military telemetry: `ALLOC // 42` (tactical diamond) and `CREDITS // 1,250` (precision crosshairs).
+    - Added dedicated military comms ribbon with callsign `COMMS // OP-COM`, animated audio waveform spectrum, and frequency readout (`FREQ 442.85 MHz`).
+    - Added live drone feed indicator: pulsing red `REC` badge + `EO-IR // 4K`.
+  - **Tactical Flight Telemetry:**
+    - Left margin: Vertical altitude ladder (`ALT // RADAR 131 MM`) and compass bearing with cardinal direction (`HDG // COMPASS 269° W`).
+    - Right margin: Optical magnification toggle (`OPTICAL 2.0X [R2]`) and 8-segment mil-spec power/battery meter (`PWR // BATT`).
+  - **Tactical Radar & Tool Grid:**
+    - Replaced generic mini-map with a 25m tactical raster radar with concentric range circles, crosshairs, and blip tracking.
+    - Smoked tool selector with PlayStation controller button glyphs (`[✕] TAG`, `[L2] SCAN`, `[△] BOOST`).
+  - **Precision Mil-Spec Reticle & Display Bezel:**
+    - Replaced childish asterisks with precision milliradian crosshairs, dynamic acquisition brackets `[   ]`, real-time laser rangefinder (`RNG // 142 MM`), and lock text.
+    - Display boundary bezel features a 52pt curved OLED contour, top compass degree ribbon (`240°...270°...300°`), and military grid coordinates (`LAT 37°52'34"N`, `LON 122°15'12"W`).
+
+**Alternatives.**
+- Retaining high-contrast cartoon neons. Rejected: directly contradicted the user's feedback and undercut the conceptual gravity of a speculative military recruitment critique.
+
+**Familiar or new:** new. Elevates the visual polish from a prototype toy to a high-end, immersive speculative design artifact.
+
+## 031 · Ammunition & ordnance system: live magazine rack, 3D laser tracers, kinetic impacts, and dry-fire reload cycle
+*2026-10-27. Implemented by `game-designer` and `ios-builder` in `GameState.swift`, `MissionSystem.swift`, `ARViewContainer.swift`, `HUDView.swift`, and `GameInput.swift`.*
+
+**Decision.**
+- **User Requirement:** "when I fire, I should be able to see ammunition being used."
+- **Ammunition & Magazine Mechanics (`GameState.swift`):**
+  - Added an 8-round tactical magazine capacity (`ammo = 8`, `maxAmmo = 8`).
+  - Added `fireWeapon() -> Bool`: Every trigger pull consumes 1 round. If ammunition reaches 0, it initiates an automatic 1.4s reload cycle (`updateWeapons(dt:)`).
+  - Dry-fire lockout: While reloading or when empty, trigger pulls trigger a dry-fire camera shutter click (`AudioServicesPlaySystemSound(1053)`) and haptic tap without firing.
+  - Manual reload: Pressing controller Triangle (`△`) or tapping the HUD Ordnance widget initiates an immediate tactical reload.
+- **Visual Ammunition Indicators (`HUDView.swift`):**
+  - **Direct Reticle Ordnance Rack:** Directly beneath the center crosshair in the player's primary focal line of sight, an 8-round miniature magazine displays individual illuminated vertical cartridges (`[ ▮ ▮ ▮ ▮ ▮ ▮ ▮ ▮ ]`).
+  - **Expended Round Animation:** Upon firing, the expended round flashes white and empties into a subtle hollow outline (`▯`), and the ammunition counter (`AMMO // 07/08`) decrements in real time.
+  - **Recoil Kick:** Firing triggers an immediate `-6pt` vertical reticle kick with spring physics (`fireRecoilTimer = 0.16s`), creating an authentic kinetic weapon discharge feel.
+  - **Reload HUD Animation:** When reloading, the magazine displays an animated spinning reload glyph and percentage progress bar (`RELOAD 65%`).
+  - **Telemetry & Tool Slot Badges:** The right margin telemetry displays a live `ORDNANCE` widget with tap-to-reload, and the bottom tool selector TAG slot displays `TAG [✕] · 8` in real time.
+- **3D Ballistics in AR View (`MissionSystem.swift` & `ARViewContainer.swift`):**
+  - **Laser Tracers (`spawnTracer`):** Every discharge spawns a 3D cylindrical tracer beam originating from the camera origin and streaking forward to the impact point in content space, dissolving over 0.12s.
+  - **Kinetic Impact (`spawnImpactPuff`):** When firing a blank round into diorama space (no locked target), the tracer strikes the miniature terrain, blooming a localized kinetic impact puff/spark, ensuring every single bullet fired has tangible feedback.
+
+**Alternatives.**
+- Pure numeric ammo counter with infinite ammo. Rejected: lacks visual kinetic weight and fails to deliver the tactile drone warfare feedback requested by the user.
+
+**Familiar or new:** new. Gives every shot mechanical and visual consequence.
+
+## 032 · Orbital strike ray of light, hostile NPC retaliation combat system, and runtime session log audit
+*2026-10-27. Implemented collaboratively across agents (`game-designer`, `ios-builder`, `healer`, `device-runner`, `reviewer`) in `MissionSystem.swift`, `GameState.swift`, `ARViewContainer.swift`, and `HUDView.swift`.*
+
+**Decision.**
+- **User Requirement:** "I should see a ray of light come to the target when I shoot and and I feel like the npc should be able to fight back, check across the logs for bugs (i def experience some) and fix it up from there, communicate with your agents"
+- **Orbital Strike Ray of Light (`MissionSystem.spawnStrikeRay`):**
+  - **Vertical Orbital Light Column:** Whenever a strike occurs (direct lock, assisted cone, or blank fire into terrain), a brilliant 0.24m tall vertical beam of light descends from the orbital sky straight into the target coordinates.
+  - **Dual Core & Ground Flare:** Built with a glowing outer corona cylinder (5.5mm radius, additive unlit material), a white-hot inner core (2.2mm radius), and an expanding ground scorch flare disc (24mm radius) on the surface, dissolving with a high-speed linear fade out over 0.35s.
+  - **Enhanced Forward Tracers:** Boosted forward camera-to-target tracer thickness to 3.0mm (from 0.7mm) so tracer streaks are unmistakably visible across all camera perspective angles.
+- **Hostile NPC Retaliation System (`NPCCombatSystem`):**
+  - **Ants Fighting Back:** Live, un-neutralized ants retaliate against drone strikes! When an ant is struck, nearby live ants telegraph reaction and launch hostile in-flight projectiles upward toward the drone camera.
+  - **Ambient Counter-Fire:** Even between strikes, ants intermittently fire bio-acid spits (Prestige 1) or anti-air darts (Prestige 2/3) at the drone camera every 4–6 seconds.
+  - **Drone Shield & Damage Flash:** Drone now possesses `droneShield` (100% integrity). When an in-flight projectile arrives within 45mm of the drone camera, it detonates on the hull:
+    - Depletes 15% shield integrity.
+    - Shakes the phone with heavy impact haptics (`UIImpactFeedbackGenerator(style: .heavy)`).
+    - Plays hull impact audio (`AudioServicesPlaySystemSound(1521)`).
+    - Triggers full-screen red impact vignette and bezel strobe (`droneDamageFlashTimer = 0.35s`).
+    - Flashes HUD threat warning banner: `⚠ THREAT DETECTED // INCOMING COUNTER-FIRE ⚠`.
+    - Telemetry HUD displays live 8-segment `SHIELD // DEF 100%` gauge turning amber below 60% and critical red below 30%.
+- **Device Log Audit & Runtime Bug Fixes (`session_20261027-183219.log`):**
+  - **Bug A (Ambient Ant Dead-Ends):** Striking ambient ants previously registered `targetId: 0, sector: SWARM`, which did not decrement `targetsRemaining` because of a check `if target.targetId > 0`. Fixed in `MissionSystem.tag(npcEntity:)` by decrementing `targetsRemaining` on all neutralized entities so the mission cleanly advances.
+  - **Bug B (Sector Name Desync):** Advancing sectors left target components labeled with a hardcoded `"LOW"` string. Fixed by binding to `GameState.shared.currentSector`.
+  - **Bug C (Stale Target Rings):** Advancing sectors previously left old target rings in place. Added a purge pass in `MissionSystem.setupTargets` to remove lingering targeting geometry.
+
+**Alternatives.**
+- Pure stationary laser line without vertical beam: rejected because in top-down AR, forward-facing lasers viewed end-on can blend into the background, whereas a descending vertical column of light delivers an unambiguous "orbital strike" spectacle.
+- Game Over screen upon shield depletion: rejected for the critique demo. Instead, shield depletion triggers an emergency circuit reboot (`droneShield = 50%` after 3s) and urgent radio comms to keep the critique demonstration moving without frustrating resets.
+
+**Familiar or new:** new. Transforms the simulation into a dynamic two-way tactical engagement.
+
+## 033 · Streamlined Mil-Tech HUD declutter pass: unobstructed central crosshair, unified single-tier top bar, and peripheral telemetry consolidation
+*2026-10-27. Implemented by `game-designer` and `ios-builder` in `HUDView.swift`.*
+
+**Decision.**
+- **User Requirement:** "clean up the HUD a bit, it's very busy"
+- **Central Reticle Decluttering (`CenterReticleView`):**
+  - Removed the bulky 8-round ammunition magazine rack, numeric `AMMO // 08/08` label, bullet separation dots, and range distance text from directly under the center crosshairs.
+  - The central reticle now maintains an unobstructed, razor-sharp line of sight: only the delicate crosshairs (+), target lock brackets `[ ]`, radial hover progress circle, and floating combat text popups appear when active.
+  - Ammunition tracking remains easily readable in the right margin telemetry (`ORD 8/8`) and bottom tool selector (`TAG [✕] 8`).
+- **Single-Tier Unified Top Bar (`topBar`):**
+  - Consolidated the previous two stacked horizontal rows into one slim, elegant top bar.
+  - Left: `● OPERATION CITADEL [LOW]` live feed status badge.
+  - Center: Real-time operator radio transmission line with live waveform icon.
+  - Right: Mission target progress (`TGT 2/3`) and interactive Mode pill (`MODE // BIO-SWARM`).
+  - Removed decorative visual clutter: eliminated dummy operator badges ("VIPER CMD", "GHOST RECON"), unused currencies ("ALLOC 42", "CREDITS 1250"), and frequency tags ("FREQ 442.85 MHz"), returning ~35 vertical points of clean AR view.
+- **Consolidated Margin Telemetry (`leftTelemetry` & `rightTelemetry`):**
+  - Left: Combined `ALT` (mm) and `HDG` (compass cardinal) into a single 2-line smoked glass module.
+  - Right: Streamlined into `ZOOM (R2)` and a unified tactical status module with `DEF` (Shield %) and `ORD` (Ammunition / Reload %). Removed the unused 8-segment battery/power meter.
+- **De-cluttered OLED Screen Curvature Bezel (`CurvedScreenBezelView`):**
+  - Removed static dummy corner coordinate text blocks (`LAT 37°52'34"N`, `LON...`, `SYS // VER.2.4`, `SATLINK // ACTIVE`) from the 4 corners of the iPhone screen.
+  - Preserved the smooth OLED display curvature boundary line, top compass tick tape, and impact damage flashes.
+- **Refined Bottom Bar (`bottomBar`):**
+  - Reduced tactical radar widget opacity (`0.7`) to sit gently in the background.
+  - Replaced the large multi-line target checkbox card with a compact, minimal `SCORE` pill.
+
+**Alternatives.**
+- Removing all HUD elements (pure clean camera): rejected because the speculative military drone critique relies on the cold, sterile drone interface overlay. This declutter pass preserves 100% of the narrative Mil-Tech atmosphere while giving the player clean visual clarity over the physical diorama.
+
+**Familiar or new:** new. Strips extraneous noise and elevates the interface to authentic military UAV operator standards.
+
+## 034 · Reactive hardware-accelerated optical zoom fix: SwiftUI scaleEffect, servo audio, and optical reticle badging
+*2026-10-27. Identified by `healer`, implemented by `ios-builder` in `ContentView.swift`, `ARViewContainer.swift`, `GameState.swift`, and `HUDView.swift`.*
+
+**Decision.**
+- **User Requirement:** "also I feel like the optical zoom does nothing"
+- **Root Cause Analysis:**
+  - `ARViewContainer` took only `settings: PlacementSettings` with no property or binding for `zoomFactor`.
+  - While `HUDView` observed `gameState.zoomFactor` (updating the button text from `1.0X` to `2.0X`), `ContentView.body` never evaluated `gameState.zoomFactor` for `ARViewContainer`.
+  - Because `updateUIView` was not evaluated by SwiftUI's Observation tracking, the underlying UIKit `arView.transform` animation code never ran. The zoom factor was an inert state change with zero visual magnification.
+- **Hardware-Accelerated Zoom Fix (`ContentView.swift` & `ARViewContainer.swift`):**
+  - Added `var zoomFactor: Float = 1.0` as an explicit stored property on `ARViewContainer`.
+  - In `ContentView.swift`, bound `ARViewContainer` to `gameState.zoomFactor` and applied `.scaleEffect(CGFloat(gameState.zoomFactor), anchor: .center)` with a calibrated spring animation (`response: 0.28, dampingFraction: 0.78`).
+  - Scaling the Metal-backed `ARView` layer directly in SwiftUI delivers instantaneous, buttery 60/120fps magnification centered on the crosshair.
+- **Targeting Calibration (`ARViewContainer.updateReticle`):**
+  - Calibrated reticle screen projection to magnification: `screenDist = unzoomedDist * CGFloat(gameState.zoomFactor)`.
+  - Targets magnified 2X or 4X on screen now scale proportionally in reticle screen-space, giving the player authentic sniper/recon target acquisition precision.
+- **Tactile & Audio Feedback (`GameState.cycleZoom`):**
+  - Added mechanical lens shutter sound (`AudioServicesPlaySystemSound(1104)`).
+  - Added rigid haptic kick (`UIImpactFeedbackGenerator(style: .rigid)`).
+  - Added tactical radio transmission: `"OPERATOR: Optical magnification set to \(Int(zoomFactor))X."`
+  - Added session logging: `"OPTICAL ZOOM: switched magnification to \(zoomFactor)X"`.
+- **Optical Zoom Lens Reticle Badge (`HUDView.swift`):**
+  - When `zoomFactor > 1.0`, an illuminated optical lens bracket (`[ 2.0X OPTICAL ]` / `[ 4.0X OPTICAL ]`) appears directly above the crosshairs.
+
+**Alternatives.**
+- Adjusting `AVCaptureDevice.videoZoomFactor`: rejected because modifying hardware capture zoom during an active ARKit world tracking session alters the camera intrinsics matrix and can destabilize VIO tracking and marker alignment.
+- Virtual camera repositioning in RealityKit: rejected because RealityKit `.ar` mode derives its projection strictly from the physical ARSession camera frame.
+
+**Familiar or new:** new. Gives the drone reconnaissance gameplay authentic sniper optics and tactile magnification feedback.
+
+## 035 · True UIKit optical zoom execution: direct arView.transform animation, optical aim assist, precision sniper reticle, and telephoto vignette
+*2026-10-27. Identified by `healer` & `device-runner`, implemented by `ios-builder` and `game-designer` in `ARViewContainer.swift`, `GameState.swift`, `ContentView.swift`, and `HUDView.swift`.*
+
+**Decision.**
+- **User Feedback Analysis:** "also I feel like the optical zoom does nothing". Device log audit (`session_20261027-190702.log`) showed that when the user pressed Circle `○` to engage 2.0X optical zoom at `19:07:41`, two critical flaws prevented zoom from being effective:
+  1. *Metal Layer Decoupling:* SwiftUI's `.scaleEffect` on `ARViewContainer` failed to scale the underlying `ARView` / `CAMetalLayer` because RealityKit's internal render loop overrides parent hosting layer transforms. The camera feed and 3D diorama remained physically at 1.0X magnification.
+  2. *Targeting Inversion Penalty:* `screenDist = unzoomed * zoomFactor` mathematically expanded the target offset, causing distant targets viewed in zoom to be pushed outside the 85pt / 35mm lock-on threshold. Zooming in actively prevented target acquisition.
+- **Native UIKit Layer Scaling (`ARViewContainer.updateUIView`):**
+  - Added direct, hardware-accelerated CoreAnimation transform in `updateUIView`:
+    ```swift
+    let targetScale = CGFloat(zoomFactor)
+    if abs(arView.transform.a - targetScale) > 0.01 {
+        UIView.animate(withDuration: 0.28, delay: 0, options: [.curveEaseOut, .beginFromCurrentState]) {
+            arView.transform = CGAffineTransform(scaleX: targetScale, y: targetScale)
+        }
+    }
+    ```
+  - Both the ARKit passthrough video and 3D RealityKit content scale smoothly from the exact center of the screen, matching the reticle crosshair. Removed SwiftUI `.scaleEffect` to prevent double-scaling.
+- **Optical Aim Assist & Precision Scoring (`ARViewContainer.updateReticle`):**
+  - Fixed `screenDist = unzoomed` so distant targets centered in the crosshairs project accurately.
+  - When `zoomFactor > 1.5` (2.0X or 4.0X):
+    - Expanded lock-on cone: `screenConeThreshold = 100.0 pt` (vs 85.0 pt) and `rayConeThreshold = 0.045 m` (vs 0.035 m).
+    - Accelerated electronic target acquisition: `lockRequiredTime = 0.35 s` (down from 0.8 s) for snap-lock sniper feel.
+    - Added Precision Strike Bonus: hitting targets in optical zoom awards `+25` score and displays `★ OPTICAL PRECISION HIT +25 ★`.
+- **Cinematic Telephoto Overlay & Mil-Dot Sniper Reticle (`HUDView.swift`):**
+  - Added `opticalScopeOverlay`: subtle radial edge vignette focusing eye gaze, framing corner optics brackets (`┌ ┐ └ ┘`), and sensor readouts (`[ OPTICAL SENSOR [2.0X] ]`, `E-STAB: LOCKED`, `FOV: 32° // RECON`).
+  - Added precision stadiametric mil-dot ticks at 14pt, 20pt, 26pt along the crosshair axes, and an illuminated `[ 2.0X OPTICAL ]` / `[ 4.0X TELEPHOTO ]` badge.
+- **Dual-Tone Lens Stepper Audio (`GameState.cycleZoom`):**
+  - Played dual camera shutter (`1104`) and mechanical stepper motor tick (`1057`).
+  - Dedicated radio callouts: `"OPERATOR: Optical 2.0X engaged. Telemetry synced."` / `"OPERATOR: Optical 4.0X telephoto active. Precision lock ready."`
+
+**Alternatives.**
+- Relying exclusively on SwiftUI view transforms: rejected because RealityKit's Metal backing ignores SwiftUI layout scaling in iOS 17/18.
+- Digital cropping without aim assist: rejected because physical hand tremors make unassisted high-magnification targeting frustrating.
+
+**Familiar or new:** new. Transforms optical zoom into a visceral, high-impact tactical weapon for distant target acquisition.
+
+## 036 · Drone gimbal aiming system: joystick reticle slew, tabletop diorama lock, and boresight re-centering
+*2026-10-27. Implemented collaboratively across agents (`alignment-analyst`, `game-designer`, `ios-builder`, `reviewer`, `device-runner`) in `ARViewContainer.swift`, `GameInput.swift`, `GameState.swift`, `VirtualControlsView.swift`, and `HUDView.swift`.*
+
+**Decision.**
+- **User Requirement:** "Can you add joystick control just incase I can't use the gyroscopic way to move the drone?" / "major bug, moving the joystick moves the ar experience"
+- **Incident & Root Cause Analysis (`alignment-analyst` & `reviewer`):**
+  - An initial implementation attempted fly-by-wire by translating `offsetEntity.transform`. In tabletop AR with physical markers and 3D-printed pins, shifting `offsetEntity` broke the physical-to-virtual registration, causing the virtual city and pins to slide off the table into thin air.
+  - In tabletop AR, `offsetEntity.transform` MUST remain strictly anchored to `settings.transform` to preserve physical-world registration.
+- **Drone Gimbal Aiming System Architecture (`ios-builder` & `game-designer`):**
+  - Instead of translating the diorama, joystick input is mapped to **Drone Gimbal Slew** (`GameState.shared.reticleOffset`), matching real-world military UAV Ground Control Stations (GCS) where operators slew the gimbal sensor crosshair across the live camera feed.
+  - Moving the Left Stick (Backbone One or on-screen `GIMBAL SLEW` thumbstick) smoothly translates `reticleOffset` up to ±160pt horizontally and ±90pt vertically at 260 pt/s.
+  - The 3D diorama, physical pins, city, and NPCs remain 100% immovable on the physical tabletop.
+- **Targeting & Slewed Raycasting (`ARViewContainer.updateReticle`):**
+  - Active reticle coordinates `activeReticle = CGPoint(x: screenCenter.x + reticleOffset.x, y: screenCenter.y + reticleOffset.y)`.
+  - Target lock-on candidates compute screen distance relative to `activeReticle`.
+  - Ballistic tracers and blank-fire raycasting project directly through `activeReticle` (`arView.ray(through: activeReticle)`), ensuring laser beams and orbital strikes land precisely where the movable crosshair points.
+- **Instant Boresight Re-Centering (`GameState.resetGimbal`):**
+  - Pressing Left Stick Click (`L3`), D-Pad Left, or tapping the on-screen `BORESIGHT` capsule immediately snaps `reticleOffset` back to `(0, 0)`.
+  - Triggers medium haptic feedback and radio comms confirmation: `"OPERATOR: Targeting reticle re-centered to boresight."`
+
+**Alternatives.**
+- Translating the 3D diorama: completely rejected because it breaks tabletop AR alignment and physically detaches the virtual city from the physical pin block.
+- Purely gyroscopic craning: retained as the primary physical mechanic; gimbal slew acts as a seamless overlay for seated or mobility-constrained targeting.
+
+**Familiar or new:** new. Preserves perfect physical alignment while giving players effortless UAV gimbal targeting.
+

@@ -268,7 +268,7 @@ final class PlacementSettings {
     }
 
     init() {
-        setup = PhysicalSetup(stored: UserDefaults.standard.string(forKey: "physicalSetup") ?? "") ?? .diorama
+        setup = PhysicalSetup(stored: UserDefaults.standard.string(forKey: "physicalSetup") ?? "") ?? .pinBlock
         reset()
     }
 

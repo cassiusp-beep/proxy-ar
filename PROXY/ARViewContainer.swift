@@ -4,6 +4,7 @@ import SwiftUI
 
 struct ARViewContainer: UIViewRepresentable {
     let settings: PlacementSettings
+    var zoomFactor: Float = 1.0
 
     func makeCoordinator() -> Coordinator {
         Coordinator(settings: settings)
@@ -23,7 +24,17 @@ struct ARViewContainer: UIViewRepresentable {
     }
 
     func updateUIView(_ arView: ARView, context: Context) {
-        // Reading these here registers them with Observation, so slider changes re-run this.
+        // Reading these here registers them with Observation
+        _ = GameState.shared.prestigeLevel
+
+        // Hardware-accelerated optical zoom scaling directly on ARView
+        let targetScale = CGFloat(zoomFactor)
+        if abs(arView.transform.a - targetScale) > 0.01 {
+            UIView.animate(withDuration: 0.28, delay: 0, options: [.curveEaseOut, .beginFromCurrentState]) {
+                arView.transform = CGAffineTransform(scaleX: targetScale, y: targetScale)
+            }
+        }
+
         context.coordinator.offsetEntity.transform = settings.transform
         context.coordinator.handleSync(settings.syncRequest)
         context.coordinator.handleRelock(settings.relockRequest)
@@ -99,10 +110,12 @@ struct ARViewContainer: UIViewRepresentable {
                 }
                 if content.city == nil { settings.showPlaceholder = true }
                 self.content = content
+                PrestigeManager.shared.cacheOriginals(city: content.city, npcs: content.npcs)
                 applyVisibility()
             }
         }
 
+        @MainActor
         func applyVisibility() {
             // Read the settings unconditionally so Observation tracks them before content loads.
             let showCity = settings.showCity, pinOcclusion = settings.pinOcclusion
@@ -116,6 +129,9 @@ struct ARViewContainer: UIViewRepresentable {
             // with real pins (Field Unit, pin block): the diorama has none.
             content.occluder?.isEnabled = pinOcclusion && !showCity && settings.setup.hasPins
             content.placeholder.isEnabled = showPlaceholder
+
+            // Apply prestige filter material swap to city and NPCs
+            PrestigeManager.shared.apply(level: GameState.shared.prestigeLevel, city: content.city, npcs: content.npcs)
         }
 
         /// `reset: false` keeps the world map and anchors; used to switch marker tracking off after a lock.
@@ -276,13 +292,289 @@ struct ARViewContainer: UIViewRepresentable {
 
         // MARK: ARSessionDelegate
 
+        private var reticleHoverTime: TimeInterval = 0
+        private var currentHoveredNpc: Entity?
+
+        @MainActor
+        private func updateReticle(frame: ARFrame) {
+            guard let arView, settings.isLocked else { return }
+            let gameState = GameState.shared
+            let gameInput = GameInput.shared
+
+            let screenCenter = CGPoint(x: arView.bounds.midX, y: arView.bounds.midY)
+            let activeReticle = CGPoint(
+                x: screenCenter.x + GameState.shared.reticleOffset.x,
+                y: screenCenter.y + GameState.shared.reticleOffset.y
+            )
+            let camTransform = frame.camera.transform
+            let camPos = SIMD3<Float>(camTransform.columns.3.x, camTransform.columns.3.y, camTransform.columns.3.z)
+            let camFwd = -SIMD3<Float>(camTransform.columns.2.x, camTransform.columns.2.y, camTransform.columns.2.z)
+
+            // Gather all active NPCs walking on the terrain
+            let npcs = content?.npcs?.children.filter { $0.components.has(NPCComponent.self) } ?? []
+
+            // Update hostile counter-combat system (in-flight projectiles, retaliation)
+            if let npcsRoot = content?.npcs {
+                let camInContent = offsetEntity.convert(position: camPos, from: nil)
+                NPCCombatSystem.shared.update(dronePos: camInContent, npcsRoot: npcsRoot, dt: 1.0 / 60.0)
+            }
+
+            struct Candidate {
+                let entity: Entity
+                let screenDist: CGFloat
+                let rayDist: Float
+                let depth: Float
+                let isTagged: Bool
+                let targetId: Int
+            }
+
+            var candidates: [Candidate] = []
+
+            for npc in npcs {
+                let worldPos = npc.position(relativeTo: nil)
+                let toNpc = worldPos - camPos
+                let depth = simd_dot(toNpc, camFwd)
+                guard depth > 0.05 else { continue } // Must be in front of the camera
+
+                let projOnRay = camPos + camFwd * depth
+                let rayDist = simd_length(worldPos - projOnRay)
+
+                var screenDist: CGFloat = 9999.0
+                if let pt = arView.project(worldPos) {
+                    let unzoomed = hypot(pt.x - activeReticle.x, pt.y - activeReticle.y)
+                    // Screen distance in unscaled reticle points
+                    screenDist = unzoomed
+                }
+
+                let targetComp = npc.components[TargetComponent.self]
+                let isTagged = targetComp?.isTagged ?? false
+                let targetId = targetComp?.targetId ?? 0
+
+                candidates.append(Candidate(
+                    entity: npc,
+                    screenDist: screenDist,
+                    rayDist: rayDist,
+                    depth: depth,
+                    isTagged: isTagged,
+                    targetId: targetId
+                ))
+            }
+
+            // In high zoom, optical aim assist expands lock-on cone and electronic lock speed
+            let isZoomed = gameState.zoomFactor > 1.5
+            let screenConeThreshold: CGFloat = isZoomed ? 100.0 : 85.0
+            let rayConeThreshold: Float = isZoomed ? 0.045 : 0.035
+
+            let inReticle = candidates
+                .filter { !$0.isTagged && ($0.screenDist < screenConeThreshold || $0.rayDist < rayConeThreshold) }
+                .sorted { min($0.screenDist, CGFloat($0.rayDist * 1000.0)) < min($1.screenDist, CGFloat($1.rayDist * 1000.0)) }
+
+            let bestTarget = inReticle.first
+
+            if let targetCandidate = bestTarget {
+                let targetEntity = targetCandidate.entity
+
+                if currentHoveredNpc == targetEntity {
+                    reticleHoverTime += 1.0 / 60.0
+                } else {
+                    currentHoveredNpc = targetEntity
+                    reticleHoverTime = 0
+                }
+
+                gameState.isTargetLocked = true
+                gameState.lockedTargetId = targetCandidate.targetId
+                let lockRequiredTime = isZoomed ? 0.35 : 0.8
+                gameState.lockProgress = Float(min(1.0, reticleHoverTime / lockRequiredTime))
+
+                // Strike ONLY when the player pulls the trigger (✕, □, or tap TAG)!
+                if gameInput.tagTriggered {
+                    gameInput.tagTriggered = false
+
+                    // Ammunition Check: Must have rounds to fire
+                    guard gameState.fireWeapon() else {
+                        AudioServicesPlaySystemSound(1053) // Dry fire click
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        SessionLogger.shared.log("DRY FIRE / RELOAD: ammunition empty (ammo=\(gameState.ammo))", category: "WEAPONS")
+                        return
+                    }
+
+                    // Firing discharge audio & recoil haptic
+                    AudioServicesPlaySystemSound(1520)
+                    UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+
+                    // Optical Zoom Precision Hit Bonus
+                    if isZoomed {
+                        gameState.score += 25
+                        gameState.strikePopupText = "★ OPTICAL PRECISION HIT +25 ★"
+                        gameState.strikePopupTimer = 1.0
+                    }
+
+                    // Spawn 3D ballistic tracer and orbital strike ray of light to target
+                    let camInContent = offsetEntity.convert(position: camPos, from: nil)
+                    let targetInContent = targetEntity.position(relativeTo: offsetEntity)
+                    MissionSystem.spawnTracer(from: camInContent, to: targetInContent, in: offsetEntity)
+                    MissionSystem.spawnStrikeRay(targetPos: targetInContent, in: offsetEntity)
+
+                    reticleHoverTime = 0
+                    gameState.isTargetLocked = false
+                    gameState.lockProgress = 0
+
+                    MissionSystem.tag(npcEntity: targetEntity)
+                    if let npcsRoot = content?.npcs {
+                        NPCCombatSystem.shared.triggerRetaliation(from: targetEntity, in: npcsRoot, toward: camInContent)
+                    }
+                    SessionLogger.shared.log("DIRECT STRIKE: fired round (\(gameState.ammo)/\(gameState.maxAmmo)) at screenDist=\(Int(targetCandidate.screenDist))pt, rayDist=\(Int(targetCandidate.rayDist * 1000))mm [zoom=\(gameState.zoomFactor)X]", category: "RETICLE")
+                }
+            } else {
+                currentHoveredNpc = nil
+                reticleHoverTime = 0
+                gameState.isTargetLocked = false
+                gameState.lockedTargetId = nil
+                gameState.lockProgress = 0
+
+                // If Attack/Tag button was pressed while NOT hovering a target dead-center,
+                // check for assisted aim within an expanded cone (up to 140 pt / 60 mm)
+                if gameInput.tagTriggered {
+                    gameInput.tagTriggered = false
+
+                    // Ammunition Check: Must have rounds to fire
+                    guard gameState.fireWeapon() else {
+                        AudioServicesPlaySystemSound(1053) // Dry fire click
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        SessionLogger.shared.log("DRY FIRE / RELOAD: ammunition empty (ammo=\(gameState.ammo))", category: "WEAPONS")
+                        return
+                    }
+
+                    // Firing discharge audio & recoil haptic
+                    AudioServicesPlaySystemSound(1520)
+                    UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+
+                    // Optical Zoom Precision Hit Bonus
+                    if isZoomed {
+                        gameState.score += 25
+                        gameState.strikePopupText = "★ OPTICAL PRECISION HIT +25 ★"
+                        gameState.strikePopupTimer = 1.0
+                    }
+
+                    let camInContent = offsetEntity.convert(position: camPos, from: nil)
+
+                    let nearby = candidates
+                        .filter { !$0.isTagged && ($0.screenDist < 140.0 || $0.rayDist < 0.060) }
+                        .sorted { $0.screenDist < $1.screenDist }
+
+                    if let assistedTarget = nearby.first {
+                        let targetInContent = assistedTarget.entity.position(relativeTo: offsetEntity)
+                        MissionSystem.spawnTracer(from: camInContent, to: targetInContent, in: offsetEntity)
+                        MissionSystem.spawnStrikeRay(targetPos: targetInContent, in: offsetEntity)
+                        MissionSystem.tag(npcEntity: assistedTarget.entity)
+                        if let npcsRoot = content?.npcs {
+                            NPCCombatSystem.shared.triggerRetaliation(from: assistedTarget.entity, in: npcsRoot, toward: camInContent)
+                        }
+                        SessionLogger.shared.log("ASSISTED STRIKE: fired round (\(gameState.ammo)/\(gameState.maxAmmo)) at screenDist=\(Int(assistedTarget.screenDist))pt, rayDist=\(Int(assistedTarget.rayDist * 1000))mm [zoom=\(gameState.zoomFactor)X]", category: "RETICLE")
+                    } else {
+                        // Blank fire through active reticle into diorama space
+                        let ray = arView.ray(through: activeReticle)
+                        let impactWorld = ray != nil ? ray!.origin + ray!.direction * 0.25 : (camPos + camFwd * 0.20)
+                        let impactInContent = offsetEntity.convert(position: impactWorld, from: nil)
+                        MissionSystem.spawnTracer(from: camInContent, to: impactInContent, in: offsetEntity)
+                        MissionSystem.spawnImpactPuff(at: impactInContent, in: offsetEntity)
+                        MissionSystem.spawnStrikeRay(targetPos: impactInContent, in: offsetEntity)
+                        SessionLogger.shared.log("BLANK STRIKE: fired round (\(gameState.ammo)/\(gameState.maxAmmo)) into diorama terrain", category: "RETICLE")
+                    }
+                }
+            }
+        }
+
+        // Drone Gimbal Aiming System (Joystick Reticle Control)
+        private func updateGimbalAim(dt: Float) {
+            let input = GameInput.shared
+            let gameState = GameState.shared
+
+            let hasInput = abs(input.moveVector.x) > 0.04 || abs(input.moveVector.y) > 0.04
+
+            if hasInput {
+                let speed: CGFloat = 260.0 // points per second across the screen
+                var newX = gameState.reticleOffset.x + CGFloat(input.moveVector.x) * speed * CGFloat(dt)
+                var newY = gameState.reticleOffset.y - CGFloat(input.moveVector.y) * speed * CGFloat(dt)
+
+                // Clamp to comfortable on-screen targeting bounds (inset from margins)
+                newX = max(-160, min(160, newX))
+                newY = max(-90, min(90, newY))
+
+                gameState.reticleOffset = CGPoint(x: newX, y: newY)
+                gameState.isGimbalAimActive = true
+            }
+        }
+
+        private func updateCameraTelemetry(frame: ARFrame) {
+            guard anchorEntity != nil else { return }
+            let dt: Float = 1.0 / 60.0
+            updateGimbalAim(dt: dt)
+
+            let invOffset = offsetEntity.transformMatrix(relativeTo: nil).inverse
+            let camWorld = frame.camera.transform.columns.3
+            let cam4 = invOffset * SIMD4<Float>(camWorld.x, camWorld.y, camWorld.z, 1.0)
+            let camContent = SIMD3<Float>(cam4.x, cam4.y, cam4.z)
+
+            if let terrain = TerrainData.shared {
+                let groundY = terrain.height(x: camContent.x, z: camContent.z)
+                let altMM = max(0, (camContent.y - groundY) * 1000)
+                GameState.shared.droneAltitudeMM = altMM
+            }
+
+            // Camera heading in content frame (-Z in camera frame)
+            let camFwdCol = frame.camera.transform.columns.2
+            let camFwdWorld = -SIMD3<Float>(camFwdCol.x, camFwdCol.y, camFwdCol.z)
+            let fwd4 = invOffset * SIMD4<Float>(camFwdWorld.x, camFwdWorld.y, camFwdWorld.z, 0.0)
+            let fwdContent = SIMD2<Float>(fwd4.x, fwd4.z)
+            let len = simd_length(fwdContent)
+            if len > 1e-4 {
+                let norm = fwdContent / len
+                var deg = atan2(norm.x, -norm.y) * 180.0 / .pi
+                if deg < 0 { deg += 360.0 }
+                GameState.shared.droneHeadingDeg = deg
+            }
+
+            // Comfortable fuel drain rate for critique (~5.5 minutes of continuous full flight)
+            if !GameState.shared.isFuelEmpty {
+                GameState.shared.fuel = max(0, GameState.shared.fuel - dt * 0.3)
+            }
+
+            // Update weapon reload and recoil timers
+            GameState.shared.updateWeapons(dt: dt)
+
+            // Decrement active game UI timers
+            if GameState.shared.tagBannerTimer > 0 {
+                GameState.shared.tagBannerTimer = max(0, GameState.shared.tagBannerTimer - dt)
+            }
+            if GameState.shared.strikePopupTimer > 0 {
+                GameState.shared.strikePopupTimer = max(0, GameState.shared.strikePopupTimer - dt)
+            }
+            if GameState.shared.screenFlashTimer > 0 {
+                GameState.shared.screenFlashTimer = max(0, GameState.shared.screenFlashTimer - dt)
+            }
+            if GameState.shared.hostileWarningTimer > 0 {
+                GameState.shared.hostileWarningTimer = max(0, GameState.shared.hostileWarningTimer - dt)
+            }
+            if GameState.shared.droneDamageFlashTimer > 0 {
+                GameState.shared.droneDamageFlashTimer = max(0, GameState.shared.droneDamageFlashTimer - dt)
+            }
+        }
+
         func session(_ session: ARSession, didUpdate frame: ARFrame) {
             updateScan(with: frame)
             if settings.markerSeenTwice,
                ProcessInfo.processInfo.systemUptime - lastMarkerSample > Self.seenTwiceTimeout {
                 settings.markerSeenTwice = false  // back to "Locate your Field Unit"
             }
-            if !settings.isLocked { tryLock() }  // timeout and fallback paths
+            if !settings.isLocked {
+                tryLock()  // timeout and fallback paths
+            } else {
+                updateCameraTelemetry(frame: frame)
+                Task { @MainActor in
+                    self.updateReticle(frame: frame)
+                }
+            }
         }
 
         func session(_ session: ARSession, didUpdate anchors: [ARAnchor]) {

@@ -24,6 +24,9 @@ enum ContentLoader {
     @MainActor
     static func loadContent() async -> Content {
         let npcs = TerrainData.shared.map { NPCSystem.spawn(count: npcCount, terrain: $0) }
+        if let npcs {
+            MissionSystem.setupTargets(in: npcs, count: 3)
+        }
         return Content(city: await loadCity(), occluder: await loadOccluder(), placeholder: makePlaceholder(), npcs: npcs)
     }
 
@@ -89,29 +92,34 @@ enum ContentLoader {
 
     // MARK: Cartoon restyle
 
+    // MARK: Cel-Shaded Architectural Palette
+
+    /// Sophisticated cel-shaded architectural diorama palette.
+    /// Replaces garish toy-like neons with matte tactical tones, architectural resins, and crisp specularity.
     static let palette: [UIColor] = [
-        UIColor(red: 1.00, green: 0.25, blue: 0.55, alpha: 1), // hot pink
-        UIColor(red: 1.00, green: 0.84, blue: 0.10, alpha: 1), // sunshine yellow
-        UIColor(red: 0.20, green: 0.65, blue: 1.00, alpha: 1), // sky blue
-        UIColor(red: 0.45, green: 0.90, blue: 0.20, alpha: 1), // lime
-        UIColor(red: 1.00, green: 0.55, blue: 0.10, alpha: 1), // orange
-        UIColor(red: 0.60, green: 0.35, blue: 1.00, alpha: 1), // purple
-        UIColor(red: 0.10, green: 0.85, blue: 0.80, alpha: 1), // turquoise
+        UIColor(red: 0.34, green: 0.44, blue: 0.33, alpha: 1), // 0: Tactical Sage / Field Grass
+        UIColor(red: 0.86, green: 0.84, blue: 0.80, alpha: 1), // 1: Architectural Resin / Off-White
+        UIColor(red: 0.40, green: 0.44, blue: 0.42, alpha: 1), // 2: Weathered Slate
+        UIColor(red: 0.28, green: 0.36, blue: 0.28, alpha: 1), // 3: Olive Groundcover
+        UIColor(red: 0.52, green: 0.48, blue: 0.42, alpha: 1), // 4: Terracotta / Warm Earth
+        UIColor(red: 0.24, green: 0.28, blue: 0.35, alpha: 1), // 5: Muted Navy Charcoal
+        UIColor(red: 0.60, green: 0.58, blue: 0.54, alpha: 1), // 6: Limestone Concrete
     ]
 
     /// Name keywords that pin a color, checked against entity names (lowercased).
     /// The terrain_* bands and figures come from tools/export_models.py.
     static let keywordColors: [(keywords: [String], color: UIColor)] = [
-        (["terrain_low"], palette[3]),
-        (["terrain_mid"], palette[1]),
-        (["terrain_high"], palette[4]),
-        (["terrain_peak"], palette[0]),
-        (["figure"], palette[5]),
-        (["road", "street", "asphalt", "highway"], UIColor(red: 0.42, green: 0.38, blue: 0.62, alpha: 1)),
-        (["tree", "grass", "park", "lawn", "leaf", "foliage"], palette[3]),
-        (["water", "river", "lake", "sea", "pool"], palette[2]),
-        (["roof"], UIColor(red: 1.00, green: 0.35, blue: 0.20, alpha: 1)),
-        (["window", "glass"], palette[6]),
+        (["terrain_low"], UIColor(red: 0.30, green: 0.40, blue: 0.29, alpha: 1)),      // Low terrain: Muted sage groundcover
+        (["terrain_mid"], UIColor(red: 0.44, green: 0.46, blue: 0.41, alpha: 1)),      // Mid terrain: Warm slate terrace
+        (["terrain_high"], UIColor(red: 0.55, green: 0.53, blue: 0.48, alpha: 1)),     // High terrain: Weathered limestone
+        (["terrain_peak"], UIColor(red: 0.72, green: 0.70, blue: 0.66, alpha: 1)),     // Peak terrain: Pale architectural crest
+        (["figure"], UIColor(red: 0.28, green: 0.32, blue: 0.38, alpha: 1)),           // Humanoid figures: Muted charcoal/navy
+        (["road", "street", "asphalt", "highway", "path"], UIColor(red: 0.22, green: 0.24, blue: 0.26, alpha: 1)), // Dark asphalt
+        (["tree", "grass", "park", "lawn", "leaf", "foliage"], UIColor(red: 0.24, green: 0.35, blue: 0.24, alpha: 1)), // Deep moss
+        (["water", "river", "lake", "sea", "pool"], UIColor(red: 0.20, green: 0.32, blue: 0.42, alpha: 1)), // Deep tactical navy
+        (["roof"], UIColor(red: 0.48, green: 0.34, blue: 0.28, alpha: 1)),             // Matte terracotta / oxidized copper
+        (["window", "glass"], UIColor(red: 0.65, green: 0.75, blue: 0.80, alpha: 1)),   // Clean architectural glass
+        (["building", "wall", "house", "structure"], UIColor(red: 0.86, green: 0.84, blue: 0.80, alpha: 1)), // Off-white architectural plaster
     ]
 
     static func cartoonize(_ entity: Entity) {
@@ -149,7 +157,8 @@ enum ContentLoader {
         if useUnlit {
             return UnlitMaterial(color: color)
         }
-        return SimpleMaterial(color: color, roughness: 0.85, isMetallic: false)
+        // Cel-shaded look: Crisp 0.35 roughness gives clean specular roll-off without muddy chalkiness
+        return SimpleMaterial(color: color, roughness: 0.35, isMetallic: false)
     }
 
     /// FNV-1a; Swift's Hasher is seeded per launch, so it would reshuffle colors every run.

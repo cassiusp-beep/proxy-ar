@@ -17,6 +17,10 @@ struct NPCSystem: System {
         let dt = Float(min(context.deltaTime, 0.1))  // don't leap after a stall
         for entity in context.entities(matching: Self.query, updatingSystemWhen: .rendering) {
             guard var npc = entity.components[NPCComponent.self] else { continue }
+            // Neutralized/tagged figures/ants freeze permanently where they were struck
+            if let target = entity.components[TargetComponent.self], target.isTagged {
+                continue
+            }
             let before = npc.position
             Self.advance(&npc, dt: dt, terrain: terrain)
 
