@@ -257,8 +257,8 @@ struct HUDView: View {
                         .foregroundStyle(.white)
 
                     if GameInput.shared.isControllerConnected {
-                        Text("R2")
-                            .font(.system(size: 7, weight: .black, design: .monospaced))
+                        Text("○")
+                            .font(.system(size: 8, weight: .heavy, design: .rounded))
                             .foregroundStyle(.black)
                             .padding(.horizontal, 3)
                             .padding(.vertical, 1)
@@ -413,11 +413,12 @@ struct HUDView: View {
                 // PlayStation controller button prompt
                 if GameInput.shared.isControllerConnected {
                     if tool == .tag {
-                        Text("✕")
-                            .font(.system(size: 9, weight: .heavy, design: .rounded))
+                        Text("R2")
+                            .font(.system(size: 8, weight: .black, design: .monospaced))
                             .foregroundStyle(isSelected ? .black : .white)
-                            .frame(width: 15, height: 15)
-                            .background(isSelected ? Color.white : Color.white.opacity(0.2), in: Circle())
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(isSelected ? Color.white : Color.white.opacity(0.2), in: RoundedRectangle(cornerRadius: 2))
                     } else if tool == .scan {
                         Text("L2")
                             .font(.system(size: 8, weight: .black, design: .monospaced))

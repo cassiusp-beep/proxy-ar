@@ -388,6 +388,9 @@ struct ARViewContainer: UIViewRepresentable {
                 if gameInput.tagTriggered {
                     gameInput.tagTriggered = false
 
+                    // Hardware Muzzle Flashlight Strobe (Fires whenever player pulls trigger)
+                    FlashlightController.shared.flash()
+
                     // Ammunition Check: Must have rounds to fire
                     guard gameState.fireWeapon() else {
                         AudioServicesPlaySystemSound(1053) // Dry fire click
@@ -434,6 +437,9 @@ struct ARViewContainer: UIViewRepresentable {
                 // check for assisted aim within an expanded cone (up to 140 pt / 60 mm)
                 if gameInput.tagTriggered {
                     gameInput.tagTriggered = false
+
+                    // Hardware Muzzle Flashlight Strobe (Fires whenever player pulls trigger)
+                    FlashlightController.shared.flash()
 
                     // Ammunition Check: Must have rounds to fire
                     guard gameState.fireWeapon() else {

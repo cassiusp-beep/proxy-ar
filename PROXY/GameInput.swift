@@ -148,6 +148,18 @@ final class GameInput {
             }
         }
 
+        // R2 Trigger [R2]: Primary Weapon Trigger / Shoot (pull finger to fire & flash)
+        gamepad.rightTrigger.pressedChangedHandler = { [weak self] _, _, pressed in
+            if pressed {
+                guard !GameState.shared.isConnectionLost else { return }
+                SessionLogger.shared.log("Controller R2 / Right Trigger pressed: TAG/STRIKE triggered", category: "INPUT")
+                self?.tagTriggered = true
+                Task { @MainActor in
+                    GameState.shared.selectedToolIndex = GameState.ToolSlot.tag.rawValue
+                }
+            }
+        }
+
         // Cross [✕] and Square [□] buttons: Attack / Tag action
         gamepad.buttonA.pressedChangedHandler = { [weak self] _, _, pressed in
             if pressed {

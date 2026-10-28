@@ -662,4 +662,21 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun devicectl device 
 
 **Familiar or new:** new. Gives the PROXY app a signature, iconic presence on the iOS home screen matching its retro-futuristic drone surveillance aesthetic.
 
+## 040 · Real-world hardware LED flashlight muzzle strobe on weapon trigger pull
+*2026-10-27. Requested by user ("anytime I pull my finger on the shoot button, I would like my flashlight to flash"); implemented by specialist council (`game-designer`, `ios-builder`, `reviewer`, `device-runner`, `documenter`) in `FlashlightController.swift`, `GameInput.swift`, `ARViewContainer.swift`, and `HUDView.swift`.*
+
+**Decision.**
+- **Tactical Real-World Illumination:**
+  - Designed `FlashlightController` to interface with the iPhone 17 Pro Max's 48MP Fusion back camera True Tone LED flash via `AVCaptureDevice` and `lockForConfiguration()`.
+  - Strobe duration tuned to **70 milliseconds (`0.070s`)**: long enough to trigger full True Tone LED illumination across the real-world room and table diorama, short enough to deliver a razor-sharp, cinematic muzzle flash.
+  - Non-blocking architecture: runs asynchronously on a dedicated `.userInteractive` serial GCD queue (`com.cassiuspalacio.proxy.flashlight`), ensuring zero frame drops or latency on the RealityKit 60fps render loop.
+  - Semi-auto spam safety: cancels pending turn-off work items on subsequent rapid trigger pulls to prevent hardware driver stalls or stuck states, and guarantees clean shutoff on app backgrounding or telemetry loss.
+- **Trigger Pull Integration:**
+  - **Controller Inputs (`GameInput.swift`):** Bound `gamepad.rightTrigger` (R2) as the primary physical index-finger weapon trigger. Face buttons `✕` (A) and `□` (X) also trigger weapon discharge.
+  - **Touch HUD Input (`HUDView.swift`):** Tapping the central `TAG [8]` tool slot executes the weapon strike and strobes the flashlight. Updated HUD prompt to show `R2` on the TAG tool button, and moved the `○` prompt to the Digi-Zoom button.
+  - **Gunfire Discharge & Blank Fire (`ARViewContainer.swift`):** Triggering weapon fire immediately strobes the rear LED flashlight in sync with the `1520` gunfire discharge audio, rigid iPhone haptics, on-screen reticle recoil kick, and 3D ballistic tracers.
+
+**Familiar or new:** new. Bridges tabletop virtual AR with physical reality, illuminating the physical resin diorama on every shot.
+
+
 
