@@ -48,13 +48,15 @@ struct DebugPanel: View {
                             }
                             .buttonStyle(.borderedProminent)
 
-                            Button("Refill Fuel") {
-                                GameState.shared.fuel = 100
+                            Button("Test Hit") {
+                                GameState.shared.damageDrone(amount: 20)
                             }
                             .buttonStyle(.bordered)
 
-                            Button("Test Hit") {
-                                GameState.shared.damageDrone(amount: 15)
+                            Button("Refuel & Repair") {
+                                GameState.shared.droneShield = 100
+                                GameState.shared.fuel = 100
+                                GameState.shared.isConnectionLost = false
                             }
                             .buttonStyle(.bordered)
                         }

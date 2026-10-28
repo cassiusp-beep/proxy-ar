@@ -9,13 +9,33 @@ struct ContentView: View {
             ARViewContainer(settings: settings, zoomFactor: gameState.zoomFactor)
                 .ignoresSafeArea()
 
-            if settings.isLocked {
-                HUDView(settings: settings)
-                    .transition(.opacity)
+#if targetEnvironment(simulator)
+            HUDView(settings: settings)
+                .ignoresSafeArea()
+                .transition(.opacity)
 
+            if gameState.showVirtualControlsOverride {
                 VStack {
                     Spacer()
                     VirtualControlsView()
+                }
+            }
+
+            if gameState.isFuelEmpty {
+                RefuelSheet()
+                    .transition(.opacity)
+            }
+#else
+            if settings.isLocked {
+                HUDView(settings: settings)
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+
+                if gameState.showVirtualControlsOverride {
+                    VStack {
+                        Spacer()
+                        VirtualControlsView()
+                    }
                 }
 
                 if gameState.isFuelEmpty {
@@ -48,6 +68,7 @@ struct ContentView: View {
                     Spacer()
                 }
             }
+#endif
 
             // Debug panel toggleable via three-finger tap in any state
             if settings.showDebug {

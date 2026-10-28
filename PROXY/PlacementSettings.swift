@@ -229,7 +229,11 @@ final class PlacementSettings {
     var lidarOcclusion = false
     var handOcclusion = true
     var showMesh = false
+#if targetEnvironment(simulator)
+    var isLocked = true
+#else
     var isLocked = false
+#endif
     /// The marker is in view and its pose is being averaged before locking.
     var isSampling = false
     /// Viewpoint-diverse sampling before the lock; read by the samplers at lock time.

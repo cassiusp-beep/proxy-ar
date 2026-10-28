@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import UIKit
+import SwiftUI
 import AudioToolbox
 
 /// Central observable game state for PROXY: mission progress, fuel, score, prestige and currencies.
@@ -17,6 +18,13 @@ final class GameState {
     // MARK: - Volvo Windshield HUD Settings
     var hudThemePreset: HUDThemePreset = .ice
     var cornerRadiusSetting: CGFloat = 55.0
+
+    enum IslandSide: String, CaseIterable {
+        case auto = "Auto"
+        case left = "Left"
+        case right = "Right"
+    }
+    var islandSideOverride: IslandSide = .auto
 
     // MARK: - Zoom State
     var zoomFactor: Float = 1.0          // 1.0X, 2.0X, 4.0X
@@ -36,11 +44,11 @@ final class GameState {
         UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
 
         if zoomFactor > 3.5 {
-            radioMessage = "OPTICS 4.0X // TELEMETRY SYNCED"
+            radioMessage = "Optics: 4.0X precision zoom engaged"
         } else if zoomFactor > 1.5 {
-            radioMessage = "OPTICS 2.0X // PRECISION GRID"
+            radioMessage = "Optics: 2.0X precision grid"
         } else {
-            radioMessage = "OPTICS 1.0X // RECON RESTORED"
+            radioMessage = "Optics: 1.0X normal view"
         }
 
         SessionLogger.shared.log("SYNTHETIC SENSOR ZOOM: switched magnification to \(zoomFactor)X", category: "OPTICS")
@@ -106,7 +114,7 @@ final class GameState {
     var targetsTotal: Int = 3
 
     // MARK: - Radio Mission Feed
-    var radioMessage: String = "CITADEL RECON // 3 TARGETS IN SECTOR LOW"
+    var radioMessage: String = "Recon: 3 targets in the lower sector"
 
     var droneAltitudeMM: Float = 50.0    // Millimeters above terrain
     var droneHeadingDeg: Float = 0.0     // Compass heading degrees
@@ -123,41 +131,90 @@ final class GameState {
     var screenFlashTimer: Float = 0.0
     var isAdvancingSector: Bool = false
 
+    // MARK: - Single Top-Center Toast System
+    struct HUDToast: Equatable {
+        let icon: String
+        let text: String
+        let isWarning: Bool
+    }
+
+    var activeToast: HUDToast? = nil
+    private var toastDismissWorkItem: DispatchWorkItem? = nil
+
+    /// Shows a single toast at top center under the heading scale for ~2.0s
+    func showToast(icon: String, text: String, isWarning: Bool = false) {
+        toastDismissWorkItem?.cancel()
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {
+            activeToast = HUDToast(icon: icon, text: text, isWarning: isWarning)
+        }
+        let workItem = DispatchWorkItem { [weak self] in
+            withAnimation(.easeInOut(duration: 0.25)) {
+                self?.activeToast = nil
+            }
+        }
+        toastDismissWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0, execute: workItem)
+    }
+
     // MARK: - Drone Combat & Counter-Attack Defense
     var droneShield: Float = 100.0       // 0...100% Shield / Hull Integrity
     var isConnectionLost: Bool = false   // True when shield hits 0% (Lost connection lockout)
     var connectionLostCountdown: Float = 0.0
     var hostileWarningTimer: Float = 0.0 // Flashes warning when NPCs launch counter-attack
-    var droneDamageFlashTimer: Float = 0.0 // Screen glitch/acid flash when drone is hit by NPC
-    var hostileWarningText: String = "THREAT // INCOMING HOSTILE FIRE"
+    var droneDamageFlashTimer: Float = 0.0 // Brief 300ms soft edge vignette pulse
+    var damageShakeOffset: CGSize = .zero
+    var hostileWarningText: String = "Threat: incoming hostile fire"
 
     func damageDrone(amount: Float) {
         guard !isConnectionLost else { return }
         droneShield = max(0, droneShield - amount)
-        droneDamageFlashTimer = 0.35
-        hostileWarningText = "HULL IMPACT // SHIELD \(Int(droneShield))%"
+        droneDamageFlashTimer = 0.30 // 300ms soft vignette pulse
+        hostileWarningText = "Hull impact: shield \(Int(droneShield))%"
         hostileWarningTimer = 1.5
+        showToast(icon: "shield.slash.fill", text: "Shield hit (\(Int(droneShield))%)", isWarning: true)
+
+        // Light screen shake (strictly respects Reduce Motion)
+        if !UIAccessibility.isReduceMotionEnabled {
+            let dx = CGFloat.random(in: -3.5...3.5)
+            let dy = CGFloat.random(in: -3.0...3.0)
+            damageShakeOffset = CGSize(width: dx, height: dy)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
+                self?.damageShakeOffset = CGSize(width: -dx * 0.4, height: -dy * 0.4)
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { [weak self] in
+                self?.damageShakeOffset = .zero
+            }
+        } else {
+            damageShakeOffset = .zero
+        }
+
+        // Haptic feedback
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
 
         if droneShield <= 0 {
             droneShield = 0
             isConnectionLost = true
             connectionLostCountdown = 3.8
-            radioMessage = "OPERATOR: ⚠ HULL BREACH // LOST CONNECTION TO DRONE ⚠"
-            AudioServicesPlaySystemSound(1053) // Critical alarm buzz
+            radioMessage = "Operator: Hull breach, connection lost"
+            AudioServicesPlaySystemSound(1053)
             UINotificationFeedbackGenerator().notificationOccurred(.error)
             SnapshotStore.shared.captureAction(tag: "connection_lost")
             SessionLogger.shared.log("CRITICAL: Drone shield depleted to 0% — LOST CONNECTION", category: "COMBAT")
+            showToast(icon: "exclamationmark.triangle.fill", text: "Connection lost", isWarning: true)
 
             DispatchQueue.main.asyncAfter(deadline: .now() + 3.8) { [weak self] in
                 guard let self else { return }
                 self.droneShield = 50.0
                 self.isConnectionLost = false
                 self.connectionLostCountdown = 0.0
-                self.radioMessage = "OPERATOR: Uplink re-established! Auxiliary power online [50%]."
-                AudioServicesPlaySystemSound(1025) // Reconnect chime
+                self.radioMessage = "Operator: Uplink re-established. Auxiliary power online."
+                AudioServicesPlaySystemSound(1025)
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
+                self.showToast(icon: "checkmark.circle.fill", text: "Auxiliary power restored [50%]", isWarning: false)
                 SessionLogger.shared.log("RECOVERY: Drone connection re-established, shield at 50%", category: "COMBAT")
             }
+        } else {
+            showToast(icon: "shield.slash.fill", text: "Shield at \(Int(droneShield))%", isWarning: true)
         }
     }
 
@@ -205,7 +262,8 @@ final class GameState {
         AudioServicesPlaySystemSound(1026) // Heavy thruster ignition / sonic blast
         UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
 
-        radioMessage = "OPERATOR: ⚡ TACTICAL BOOST ENGAGED // KINETIC DEFLECTION ONLINE [1.4S] ⚡"
+        radioMessage = "Operator: Tactical boost engaged, kinetic shield online"
+        showToast(icon: "bolt.fill", text: "Tactical boost engaged", isWarning: false)
         SnapshotStore.shared.captureAction(tag: "boost_engage")
         SessionLogger.shared.log("TACTICAL BOOST ACTIVATED: Consumed 15% fuel (remaining: \(Int(fuel))%), 1.4s kinetic deflection shield deployed", category: "COUNTERMEASURE")
         return true

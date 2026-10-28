@@ -13,7 +13,7 @@ extension View {
                     .fill(.ultraThinMaterial)
                     .overlay(
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .fill(Color.white.opacity(isDepressed ? 0.03 : 0.07))
+                            .fill(Color.white.opacity(isDepressed ? 0.03 : 0.08))
                     )
             }
             .overlay {
@@ -22,16 +22,23 @@ extension View {
                         LinearGradient(
                             stops: [
                                 .init(color: Color.white.opacity(isDepressed ? 0.35 : 0.65), location: 0.0),
-                                .init(color: Color.white.opacity(0.18), location: 0.40),
-                                .init(color: Color.white.opacity(0.06), location: 1.0)
+                                .init(color: Color.white.opacity(0.20), location: 0.40),
+                                .init(color: Color.white.opacity(0.08), location: 1.0)
                             ],
                             startPoint: .top,
                             endPoint: .bottom
                         ),
-                        lineWidth: 0.75
+                        lineWidth: 1.0
                     )
             }
-            .shadow(color: Color.black.opacity(isDepressed ? 0.35 : 0.18), radius: isDepressed ? 2 : 6, x: 0, y: isDepressed ? 1 : 3)
+            .shadow(color: Color.black.opacity(isDepressed ? 0.40 : 0.22), radius: isDepressed ? 3 : 8, x: 0, y: isDepressed ? 1 : 4)
+    }
+
+    /// Dark legibility shadow ensuring contrast >= 4.5:1 over bright white markers and dark terrain
+    func hudLegibilityShadow() -> some View {
+        self
+            .shadow(color: Color.black.opacity(0.90), radius: 3, x: 0, y: 1.5)
+            .shadow(color: Color.black.opacity(0.50), radius: 7, x: 0, y: 3)
     }
 }
 
@@ -41,14 +48,10 @@ struct HUDView: View {
     @Bindable var gameState = GameState.shared
     @Bindable var settings: PlacementSettings
 
-    @State private var activeAlert: IslandAlert? = nil
-    @State private var alertDismissWorkItem: DispatchWorkItem? = nil
     @State private var prevTargetLocked: Bool = false
-    @State private var prevDamageTimer: Float = 0
-    @State private var prevDeflectionTimer: Float = 0
+    @State private var prevFuelLow: Bool = false
     @State private var isPhotoFlashActive: Bool = false
 
-    // Volvo Automotive Theme resolved against Prestige level
     private var theme: HUDTheme {
         HUDTheme.theme(for: gameState.hudThemePreset, prestige: gameState.prestigeLevel)
     }
@@ -57,31 +60,40 @@ struct HUDView: View {
         GeometryReader { geo in
             let w = geo.size.width
             let h = geo.size.height
-            let isIslandOnLeft = geo.safeAreaInsets.leading > 30
+
+            // 1. One Symmetric Frame: Use the larger of safeArea insets on BOTH sides + 14pt edge inset
+            let safeLeading = geo.safeAreaInsets.leading
+            let safeTrailing = geo.safeAreaInsets.trailing
+            let maxSafeArea = max(safeLeading, safeTrailing)
+            let effectiveSafeArea = maxSafeArea > 30 ? maxSafeArea : 59.0 // Guaranteed hardware margin
+            let edgeInset: CGFloat = 14.0
+
+            // Mirrored margin used identically on BOTH sides
+            let symmetricMargin: CGFloat = effectiveSafeArea + edgeInset
+
+            // Island detection (for mirroring sync chip away from obstacle)
+            let isIslandOnLeft = (gameState.islandSideOverride == .left) || (gameState.islandSideOverride == .auto && safeLeading > 30)
+            let isIslandOnRight = (gameState.islandSideOverride == .right) || (gameState.islandSideOverride == .auto && safeTrailing > 30)
+
+            // Full-height arc coordinates: from below top corner curve to 12pt above corner key cluster
+            let arcTopY: CGFloat = 50
+            let keyClusterHeight: CGFloat = 38 + 12 + 48 // 38 (stacked) + 12 (gap) + 48 (main) = 98 pt
+            let arcBottomY: CGFloat = h - 14 - keyClusterHeight - 12 // Even 12pt gap above key cluster
 
             ZStack {
-                // 0. Full-Screen Red Impact Flash & Perimeter Strobe
+                // 1. Simple Soft Damage Vignette Pulse in Theme Warning Color (~300ms)
                 if gameState.droneDamageFlashTimer > 0 {
-                    let intensity = Double(min(gameState.droneDamageFlashTimer / 0.35, 1.0))
-                    ZStack {
-                        // Edge-focused crimson impact vignette
-                        RadialGradient(
-                            gradient: Gradient(colors: [
-                                Color.red.opacity(0.0),
-                                Color.red.opacity(0.28 * intensity),
-                                Color.red.opacity(0.70 * intensity)
-                            ]),
-                            center: .center,
-                            startRadius: min(w, h) * 0.18,
-                            endRadius: max(w, h) * 0.75
-                        )
-
-                        // Outer windshield perimeter red impact glow
-                        RoundedRectangle(cornerRadius: gameState.cornerRadiusSetting, style: .continuous)
-                            .strokeBorder(Color.red.opacity(0.90 * intensity), lineWidth: 4.5)
-                            .padding(4)
-                            .shadow(color: Color.red.opacity(0.95 * intensity), radius: 18)
-                    }
+                    let intensity = Double(min(gameState.droneDamageFlashTimer / 0.30, 1.0))
+                    RadialGradient(
+                        gradient: Gradient(colors: [
+                            theme.warning.opacity(0.0),
+                            theme.warning.opacity(0.18 * intensity),
+                            theme.warning.opacity(0.60 * intensity)
+                        ]),
+                        center: .center,
+                        startRadius: min(w, h) * 0.25,
+                        endRadius: max(w, h) * 0.75
+                    )
                     .ignoresSafeArea()
                     .allowsHitTesting(false)
                     .animation(.easeOut(duration: 0.1), value: gameState.droneDamageFlashTimer)
@@ -99,7 +111,7 @@ struct HUDView: View {
                         .animation(.easeOut(duration: 0.1), value: gameState.boostDeflectionTimer)
                 }
 
-                // Hero Shot Photo Camera Shutter Flash
+                // Hero Shot Camera Shutter Flash
                 if isPhotoFlashActive {
                     Color.white.opacity(0.85)
                         .ignoresSafeArea()
@@ -107,83 +119,69 @@ struct HUDView: View {
                         .transition(.opacity)
                 }
 
-                // Critical Connection Lost State
-                if gameState.isConnectionLost {
-                    ZStack {
-                        Color.black.opacity(0.40)
-                        VStack(spacing: 8) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .font(.system(size: 26, weight: .bold))
-                                .foregroundStyle(theme.warning)
-                            Text("HULL BREACH // RECONNECTING")
-                                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                                .foregroundStyle(theme.text)
-                            Text(String(format: "RESTORING TELEMETRY (%.1fs)", gameState.connectionLostCountdown))
-                                .font(.system(size: 10, weight: .regular, design: .rounded))
-                                .foregroundStyle(theme.textSecondary)
-                        }
-                        .padding(.horizontal, 22)
-                        .padding(.vertical, 14)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(theme.warning.opacity(0.4), lineWidth: 1))
-                    }
-                    .ignoresSafeArea()
-                    .allowsHitTesting(false)
-                }
-
-                // 1. Off-Screen Perimeter Target Chevrons
+                // 2. Off-Screen Perimeter Target Chevrons
                 EdgeTargetChevrons(
                     threats: gameState.radarThreats,
                     viewSize: CGSize(width: w, height: h),
                     theme: theme
                 )
 
-                // 2. Top Edge: Windshield Curved Heading Scale & Sector Status
-                VStack(spacing: 4) {
+                // 3. Top Center: Windshield Curved Heading Scale & Single Toast / Radio Comms (Mutually Exclusive)
+                VStack(spacing: 8) {
                     HeadingScale(
                         headingDeg: gameState.droneHeadingDeg,
                         theme: theme,
                         viewWidth: w
                     )
 
-                    // Sector Targets & Mission Telemetry Ribbon
-                    HStack(spacing: 8) {
-                        // Sector Target Counter
-                        HStack(spacing: 4) {
-                            Image(systemName: gameState.targetsRemaining == 0 ? "checkmark.circle.fill" : "target")
-                                .font(.system(size: 8.5, weight: .semibold))
-                                .foregroundStyle(gameState.targetsRemaining == 0 ? Color.green : theme.accent)
-                            Text(gameState.targetsRemaining == 0 ? "SECTOR SECURE" : "TGT \(gameState.targetsTotal - gameState.targetsRemaining)/\(gameState.targetsTotal)")
-                                .font(.system(size: 9.5, weight: .semibold, design: .rounded))
-                                .foregroundStyle(theme.text)
-                        }
+                    // Single Toast at Top Center (Hides radio line completely while visible)
+                    ZStack {
+                        if let toast = gameState.activeToast {
+                            HStack(spacing: 7) {
+                                Image(systemName: toast.icon)
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(toast.isWarning ? theme.warning : theme.accent)
 
-                        if !gameState.radioMessage.isEmpty {
-                            Circle()
-                                .fill(Color.white.opacity(0.25))
-                                .frame(width: 2.5, height: 2.5)
-
-                            // Mission Radio Text
-                            HStack(spacing: 4) {
-                                Image(systemName: "waveform")
-                                    .font(.system(size: 7.5))
-                                    .foregroundStyle(theme.accent)
-                                Text(gameState.radioMessage)
-                                    .font(.system(size: 9, weight: .regular, design: .default))
-                                    .foregroundStyle(theme.textSecondary)
+                                Text(toast.text)
+                                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                                    .foregroundStyle(theme.text)
                                     .lineLimit(1)
+                                    .fixedSize()
                             }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 6)
+                            .background(.ultraThinMaterial, in: Capsule())
+                            .overlay(Capsule().stroke(Color.white.opacity(0.22), lineWidth: 0.75))
+                            .shadow(color: Color.black.opacity(0.35), radius: 6)
+                            .transition(.opacity)
+                        } else if !gameState.radioMessage.isEmpty {
+                            // Radio line displayed only when NO toast is active
+                            HStack(spacing: 6) {
+                                Image(systemName: "waveform")
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .foregroundStyle(theme.accent)
+
+                                Text(gameState.radioMessage)
+                                    .font(.system(size: 12, weight: .regular, design: .rounded))
+                                    .foregroundStyle(theme.text)
+                                    .lineLimit(1)
+                                    .fixedSize()
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 5)
+                            .background(.ultraThinMaterial, in: Capsule())
+                            .overlay(Capsule().stroke(Color.white.opacity(0.14), lineWidth: 0.5))
+                            .frame(maxWidth: min(390, w * 0.46))
+                            .transition(.opacity)
                         }
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 3.5)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .overlay(Capsule().stroke(Color.white.opacity(0.12), lineWidth: 0.5))
+                    .animation(.easeInOut(duration: 0.22), value: gameState.activeToast != nil)
                 }
-                .position(x: w / 2, y: 34)
+                .padding(.top, 14)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
-                // 3. Left Edge: Altitude Arc Gauge + Dedicated Shield Meter
-                EdgeArcGauge(
+                // 4. Left Edge: Full-Height Instrument Altitude Arc Gauge
+                FullHeightArcGauge(
                     type: .altitude,
                     value: gameState.droneAltitudeMM,
                     maxValue: 400.0,
@@ -192,14 +190,15 @@ struct HUDView: View {
                     shield: gameState.droneShield,
                     ammo: gameState.ammo,
                     maxAmmo: gameState.maxAmmo,
-                    hasIslandOnThisSide: isIslandOnLeft,
+                    spineX: symmetricMargin,
+                    topY: arcTopY,
+                    bottomY: arcBottomY,
                     theme: theme,
-                    viewHeight: h
+                    viewWidth: w
                 )
-                .position(x: isIslandOnLeft ? 134 : 72, y: h / 2)
 
-                // 4. Right Edge: Fuel & Ordnance Arc Gauge (Mirrored)
-                EdgeArcGauge(
+                // 6. Right Edge: Full-Height Instrument Fuel Arc Gauge
+                FullHeightArcGauge(
                     type: .fuel,
                     value: gameState.fuel,
                     maxValue: 100.0,
@@ -208,23 +207,14 @@ struct HUDView: View {
                     shield: gameState.droneShield,
                     ammo: gameState.ammo,
                     maxAmmo: gameState.maxAmmo,
-                    hasIslandOnThisSide: !isIslandOnLeft && geo.safeAreaInsets.trailing > 30,
+                    spineX: w - symmetricMargin,
+                    topY: arcTopY,
+                    bottomY: arcBottomY,
                     theme: theme,
-                    viewHeight: h
-                )
-                .position(x: w - (!isIslandOnLeft && geo.safeAreaInsets.trailing > 30 ? 134 : 72), y: h / 2)
-
-                // 5. Dynamic Island Hardware Integration Capsule & Spring Alerts
-                DynamicIslandHUD(
-                    isIslandOnLeft: isIslandOnLeft,
-                    isSynced: gameState.isTargetLocked || gameState.droneAltitudeMM > 50,
-                    activeAlert: activeAlert,
-                    theme: theme,
-                    viewWidth: w,
-                    viewHeight: h
+                    viewWidth: w
                 )
 
-                // 6. Center: Minimalist Reticle with Target Acquiring Ring (No Text Boxes)
+                // 7. Center: Minimalist Volvo Reticle (25% Larger, 2.5pt Strokes)
                 VolvoReticleView(
                     isLocked: gameState.isTargetLocked,
                     lockProgress: gameState.lockProgress,
@@ -236,65 +226,79 @@ struct HUDView: View {
                 .offset(x: gameState.reticleOffset.x, y: gameState.reticleOffset.y)
                 .position(x: w / 2, y: h / 2)
 
-                // 7. Bottom Corners: Glass Shelf Keys (Scan, Boost, Zoom on Left / Photo, Tag on Right)
+                // 8. Zoom Glass Chip (Directly Below Reticle, Centered on Same Vertical Line)
+                ZoomReticleChip(zoomFactor: gameState.zoomFactor, theme: theme) {
+                    gameState.cycleZoom()
+                }
+                .position(
+                    x: w / 2 + gameState.reticleOffset.x,
+                    y: h / 2 + gameState.reticleOffset.y + 54
+                )
+
+                // 9. Bottom Corners: Two Breathe Clusters (Scan+Boost Left, Tag+Photo Right)
                 VStack {
                     Spacer()
                     HStack(alignment: .bottom) {
-                        // Left Shelf: Scan, Boost & Zoom Keys
-                        HStack(spacing: 7) {
-                            CornerGlassKey(
-                                role: .scan,
-                                triggerHint: "L2",
-                                isSelected: gameState.selectedTool == .scan,
-                                zoomFactor: gameState.zoomFactor,
-                                theme: theme
-                            ) {
-                                gameState.selectedToolIndex = GameState.ToolSlot.scan.rawValue
-                            }
-
-                            CornerGlassKey(
-                                role: .boost,
-                                triggerHint: "L1",
+                        // Left Cluster: Boost stacked directly above Scan
+                        VStack(alignment: .leading, spacing: 12) {
+                            StackedShelfButton(
+                                iconName: "bolt.fill",
+                                label: "Boost",
+                                hint: "L1",
+                                hintSystemImage: nil,
                                 isSelected: gameState.isBoostActive || gameState.selectedTool == .boost,
-                                zoomFactor: gameState.zoomFactor,
                                 theme: theme
                             ) {
                                 gameState.selectedToolIndex = GameState.ToolSlot.boost.rawValue
                                 _ = gameState.triggerBoost()
                             }
 
-                            CornerGlassKey(
-                                role: .zoom,
-                                triggerHint: "○",
-                                isSelected: gameState.zoomFactor > 1.5,
-                                zoomFactor: gameState.zoomFactor,
+                            CornerQuarterMainKey(
+                                corner: .bottomLeading,
+                                label: "Scan",
+                                hint: "L2",
+                                iconName: "viewfinder",
+                                isSelected: gameState.selectedTool == .scan,
                                 theme: theme
                             ) {
-                                gameState.cycleZoom()
+                                gameState.selectedToolIndex = GameState.ToolSlot.scan.rawValue
                             }
                         }
-                        .padding(.leading, isIslandOnLeft ? 52 : 32)
+                        .padding(.leading, symmetricMargin)
+                        .padding(.bottom, 14)
+
+                        Spacer()
+
+                        // Center Bottom Row: Synced State Button
+                        SyncStateGlassChip(
+                            isSynced: gameState.isTargetLocked || gameState.droneAltitudeMM > 50,
+                            theme: theme
+                        ) {
+                            gameState.showToast(icon: "antenna.radiowaves.left.and.right", text: "Telemetry link active", isWarning: false)
+                        }
                         .padding(.bottom, 16)
 
                         Spacer()
 
-                        // Right Shelf: Photo Shutter & Tag Primary Strike
-                        HStack(spacing: 7) {
-                            CornerGlassKey(
-                                role: .photo,
-                                triggerHint: "△",
+                        // Right Cluster: Photo stacked directly above Tag
+                        VStack(alignment: .trailing, spacing: 12) {
+                            StackedShelfButton(
+                                iconName: "camera.fill",
+                                label: "Photo",
+                                hint: nil,
+                                hintSystemImage: "triangle",
                                 isSelected: false,
-                                zoomFactor: gameState.zoomFactor,
                                 theme: theme
                             ) {
                                 triggerPhotoCapture()
                             }
 
-                            CornerGlassKey(
-                                role: .tag,
-                                triggerHint: "R2",
+                            CornerQuarterMainKey(
+                                corner: .bottomTrailing,
+                                label: "Tag",
+                                hint: "R2",
+                                iconName: "target",
                                 isSelected: gameState.selectedTool == .tag,
-                                zoomFactor: gameState.zoomFactor,
                                 theme: theme
                             ) {
                                 gameState.selectedToolIndex = GameState.ToolSlot.tag.rawValue
@@ -305,34 +309,37 @@ struct HUDView: View {
                                 }
                             }
                         }
-                        .padding(.trailing, !isIslandOnLeft && geo.safeAreaInsets.trailing > 30 ? 52 : 32)
-                        .padding(.bottom, 16)
+                        .padding(.trailing, symmetricMargin)
+                        .padding(.bottom, 14)
                     }
                 }
             }
+            .offset(x: gameState.damageShakeOffset.width, y: gameState.damageShakeOffset.height)
             .ignoresSafeArea()
             .onAppear {
                 DroneAudioEngine.shared.start()
             }
-            .onChange(of: gameState.droneDamageFlashTimer) { _, newTimer in
-                if newTimer > 0 && prevDamageTimer == 0 {
-                    triggerAlert(icon: "shield.slash.fill", text: "Shield \(Int(gameState.droneShield))%", isWarning: true)
-                }
-                prevDamageTimer = newTimer
-            }
-            .onChange(of: gameState.boostDeflectionTimer) { _, newTimer in
-                if newTimer > 0 && prevDeflectionTimer == 0 {
-                    triggerAlert(icon: "shield.lefthalf.filled.badge.checkmark", text: "Threat deflected", isWarning: false)
-                }
-                prevDeflectionTimer = newTimer
-            }
             .onChange(of: gameState.isTargetLocked) { _, locked in
                 if locked && !prevTargetLocked {
-                    triggerAlert(icon: "target", text: "Target locked", isWarning: false)
+                    gameState.showToast(icon: "target", text: "Target locked", isWarning: false)
                 }
                 prevTargetLocked = locked
             }
+            .onChange(of: gameState.fuel) { _, newFuel in
+                if newFuel < 20.0 && !prevFuelLow {
+                    gameState.showToast(icon: "battery.25", text: "Fuel low (\(Int(newFuel))%)", isWarning: true)
+                    prevFuelLow = true
+                } else if newFuel >= 20.0 {
+                    prevFuelLow = false
+                }
+            }
+            .onChange(of: gameState.targetsRemaining) { _, remaining in
+                if remaining == 0 {
+                    gameState.showToast(icon: "checkmark.circle.fill", text: "Sector secured", isWarning: false)
+                }
+            }
         }
+        .ignoresSafeArea()
     }
 
     private var altitudeClimbRate: Float {
@@ -341,23 +348,9 @@ struct HUDView: View {
         return delta > 8 ? 0.2 : (delta < -8 ? -0.2 : 0.0)
     }
 
-    private func triggerAlert(icon: String, text: String, isWarning: Bool) {
-        alertDismissWorkItem?.cancel()
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.72)) {
-            activeAlert = IslandAlert(icon: icon, text: text, isWarning: isWarning)
-        }
-        let workItem = DispatchWorkItem {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                self.activeAlert = nil
-            }
-        }
-        alertDismissWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0, execute: workItem)
-    }
-
     private func triggerPhotoCapture() {
         UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
-        AudioServicesPlaySystemSound(1108) // Camera shutter sound
+        AudioServicesPlaySystemSound(1108) // Camera shutter
         SnapshotStore.shared.captureAction(tag: "manual_hero")
         withAnimation(.easeOut(duration: 0.08)) {
             isPhotoFlashActive = true
@@ -367,22 +360,69 @@ struct HUDView: View {
                 self.isPhotoFlashActive = false
             }
         }
-        triggerAlert(icon: "camera.fill", text: "Hero Shot Saved", isWarning: false)
+        gameState.showToast(icon: "camera.fill", text: "Hero shot saved", isWarning: false)
     }
 }
 
-// MARK: - Island Alert Data Model
+// MARK: - 1. Center Bottom Row Sync State Glass Chip
 
-struct IslandAlert: Identifiable, Equatable {
-    let id = UUID()
-    let icon: String
-    let text: String
-    let isWarning: Bool
+struct SyncStateGlassChip: View {
+    let isSynced: Bool
+    let theme: HUDTheme
+    var onTap: (() -> Void)? = nil
+
+    @State private var isTouchDepressed: Bool = false
+
+    var body: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            onTap?()
+        } label: {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(isSynced ? Color.green : theme.warning)
+                    .frame(width: 6, height: 6)
+
+                Text(isSynced ? "Synced" : "Searching…")
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(theme.text)
+                    .hudLegibilityShadow()
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
+            .background(.ultraThinMaterial, in: Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(
+                        LinearGradient(
+                            stops: [
+                                .init(color: Color.white.opacity(isTouchDepressed ? 0.35 : 0.60), location: 0.0),
+                                .init(color: Color.white.opacity(0.18), location: 0.50),
+                                .init(color: Color.white.opacity(0.08), location: 1.0)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 0.75
+                    )
+            )
+            .shadow(color: Color.black.opacity(0.25), radius: 6, y: 2)
+            .scaleEffect(isTouchDepressed ? 0.94 : 1.0)
+            .animation(.spring(response: 0.22, dampingFraction: 0.7), value: isTouchDepressed)
+        }
+        .buttonStyle(.plain)
+        .frame(minWidth: 44, minHeight: 44)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isTouchDepressed = true }
+                .onEnded { _ in isTouchDepressed = false }
+        )
+    }
 }
 
-// MARK: - 1. Edge Arc Gauge (Volvo Instrument Curve)
+// MARK: - 2. Full-Height Instrument Arc Gauge
 
-struct EdgeArcGauge: View {
+struct FullHeightArcGauge: View {
     enum GaugeType {
         case altitude
         case fuel
@@ -396,9 +436,11 @@ struct EdgeArcGauge: View {
     let shield: Float
     let ammo: Int
     let maxAmmo: Int
-    let hasIslandOnThisSide: Bool
+    let spineX: CGFloat
+    let topY: CGFloat
+    let bottomY: CGFloat
     let theme: HUDTheme
-    let viewHeight: CGFloat
+    let viewWidth: CGFloat
 
     private var progress: Double {
         Double(min(max(value / maxValue, 0.0), 1.0))
@@ -412,199 +454,260 @@ struct EdgeArcGauge: View {
     }
 
     var body: some View {
-        let h = min(280.0, viewHeight * 0.68)
         let isRight = (type == .fuel)
 
-        ZStack(alignment: isRight ? .trailing : .leading) {
-            // Background Frosted Arc Channel
-            ArcTrackShape(isMirrored: isRight, hasIslandCutout: hasIslandOnThisSide)
-                .stroke(Color.white.opacity(0.08), style: StrokeStyle(lineWidth: 18, lineCap: .round))
-                .frame(width: 90, height: h)
+        ZStack {
+            // A. Arc Track: 4 pt, low-opacity
+            FullHeightArcShape(
+                isRight: isRight,
+                spineX: spineX,
+                topY: topY,
+                bottomY: bottomY
+            )
+            .stroke(Color.white.opacity(0.18), style: StrokeStyle(lineWidth: 4.0, lineCap: .round))
 
-            // Luminous Sweeping Gradient Band
-            ArcTrackShape(isMirrored: isRight, hasIslandCutout: hasIslandOnThisSide)
-                .trim(from: 0.0, to: CGFloat(progress))
-                .stroke(
-                    LinearGradient(
-                        colors: [arcStrokeColor.opacity(0.15), arcStrokeColor.opacity(0.85)],
-                        startPoint: .bottom,
-                        endPoint: .top
-                    ),
-                    style: StrokeStyle(lineWidth: 18, lineCap: .round)
-                )
-                .frame(width: 90, height: h)
-                .shadow(color: arcStrokeColor.opacity(0.40), radius: 6)
+            // B. Value Band: 8 pt, theme accent gradient with round cap
+            FullHeightArcShape(
+                isRight: isRight,
+                spineX: spineX,
+                topY: topY,
+                bottomY: bottomY
+            )
+            .trim(from: 0.0, to: CGFloat(progress))
+            .stroke(
+                LinearGradient(
+                    colors: [arcStrokeColor.opacity(0.35), arcStrokeColor],
+                    startPoint: .bottom,
+                    endPoint: .top
+                ),
+                style: StrokeStyle(lineWidth: 8.0, lineCap: .round)
+            )
+            .shadow(color: arcStrokeColor.opacity(0.50), radius: 8)
 
-            // Precision Etched Needle Index (Volvo Luminous Needle Marker)
-            if progress > 0.01 {
-                ArcTrackShape(isMirrored: isRight, hasIslandCutout: hasIslandOnThisSide)
-                    .trim(from: max(0.0, CGFloat(progress) - 0.016), to: CGFloat(progress))
-                    .stroke(
-                        Color.white,
-                        style: StrokeStyle(lineWidth: 18, lineCap: .butt)
-                    )
-                    .frame(width: 90, height: h)
-                    .shadow(color: Color.white.opacity(0.9), radius: 3)
-            }
+            // C. Needle: 3 pt stroke with round cap
+            FullHeightArcNeedle(
+                isRight: isRight,
+                spineX: spineX,
+                topY: topY,
+                bottomY: bottomY,
+                progress: progress,
+                needleColor: .white
+            )
 
-            // Fine Etched Tick Marks along outer rim
-            ArcTicksOverlay(isMirrored: isRight, hasIslandCutout: hasIslandOnThisSide, theme: theme)
-                .frame(width: 90, height: h)
+            // D. Major Ticks (2.5pt) and Minor Ticks (1.5pt) with 13pt Semibold Numerals
+            FullHeightArcTicks(
+                type: type,
+                isRight: isRight,
+                spineX: spineX,
+                topY: topY,
+                bottomY: bottomY,
+                theme: theme
+            )
 
-            // Inside Center: Large Volvo-style Numeral & Units
-            VStack(alignment: isRight ? .trailing : .leading, spacing: 2) {
-                HStack(alignment: .firstTextBaseline, spacing: 3) {
-                    if isRight {
-                        Text("\(Int(value))")
-                            .font(.system(size: 38, weight: .light, design: .rounded))
-                            .foregroundStyle(arcStrokeColor)
-                            .contentTransition(.numericText())
-                        Text("%")
-                            .font(.system(size: 11, weight: .regular, design: .rounded))
-                            .foregroundStyle(theme.textSecondary)
-                    } else {
-                        Text("\(Int(value))")
-                            .font(.system(size: 38, weight: .light, design: .rounded))
-                            .foregroundStyle(theme.text)
-                            .contentTransition(.numericText())
-                        Text("mm")
-                            .font(.system(size: 11, weight: .regular, design: .rounded))
-                            .foregroundStyle(theme.textSecondary)
-                    }
+            // E. Large Gauge Numeral (46pt semibold) & Secondary Readouts (15pt medium)
+            // Sits inside arc, vertically centered on arc, with 12pt gap from tick numerals
+            let readoutCenterY: CGFloat = (topY + bottomY) / 2
+
+            VStack(alignment: isRight ? .trailing : .leading, spacing: 5) {
+                // Dominant Numeral (46pt semibold)
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text("\(Int(value))")
+                        .font(.system(size: 46, weight: .semibold, design: .rounded))
+                        .foregroundStyle(isRight ? arcStrokeColor : theme.text)
+                        .contentTransition(.numericText())
+                        .hudLegibilityShadow()
+
+                    Text(isRight ? "%" : "mm")
+                        .font(.system(size: 15, weight: .medium, design: .rounded))
+                        .foregroundStyle(theme.textSecondary)
+                        .hudLegibilityShadow()
                 }
 
                 if type == .altitude {
-                    // Vertical Speed: Tiny arrow and number beneath
-                    HStack(spacing: 2) {
-                        Image(systemName: climbRate > 0 ? "arrow.up" : (climbRate < 0 ? "arrow.down" : "minus"))
-                            .font(.system(size: 8, weight: .bold))
+                    // Vertical Speed (15pt medium, clearly labeled)
+                    HStack(spacing: 5) {
+                        Text("V/S")
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
                             .foregroundStyle(theme.textSecondary)
-                        Text(String(format: "%.1f", abs(climbRate)))
-                            .font(.system(size: 10, weight: .regular, design: .rounded))
+
+                        Image(systemName: climbRate > 0 ? "arrow.up" : (climbRate < 0 ? "arrow.down" : "minus"))
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(theme.textSecondary)
+
+                        Text(String(format: "%+.1f m/s", climbRate))
+                            .font(.system(size: 15, weight: .medium, design: .rounded))
                             .foregroundStyle(theme.textSecondary)
                     }
+                    .hudLegibilityShadow()
 
-                    // Dedicated Hull Shield Meter (Volvo Automotive Defense Arc / Segment Bar)
-                    HStack(spacing: 3) {
-                        Image(systemName: "shield.fill")
-                            .font(.system(size: 7.5))
-                            .foregroundStyle(shield < 25 ? theme.warning : theme.accent)
+                    // Dedicated Hull Shield Meter (15pt medium)
+                    HStack(spacing: 5) {
+                        Text("Shield")
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .foregroundStyle(theme.textSecondary)
 
-                        HStack(spacing: 1.5) {
+                        HStack(spacing: 2.5) {
                             ForEach(0..<8, id: \.self) { seg in
-                                let segThreshold = Float(seg + 1) * 12.5
+                                let threshold = Float(seg + 1) * 12.5
                                 Rectangle()
-                                    .fill(shield >= segThreshold ? (shield < 25 ? theme.warning : theme.accent) : Color.white.opacity(0.12))
-                                    .frame(width: 3.5, height: 4.5)
+                                    .fill(shield >= threshold ? (shield < 25 ? theme.warning : theme.accent) : Color.white.opacity(0.18))
+                                    .frame(width: 5, height: 7)
                                     .cornerRadius(1)
                             }
                         }
 
                         Text("\(Int(shield))%")
-                            .font(.system(size: 8.5, weight: .regular, design: .rounded))
+                            .font(.system(size: 15, weight: .medium, design: .rounded))
                             .foregroundStyle(shield < 25 ? theme.warning : theme.textSecondary)
                     }
-                    .padding(.top, 3)
+                    .hudLegibilityShadow()
                 } else {
-                    // Right Arc: Companion Score Numeral + Glass Ordnance Dots
-                    VStack(alignment: .trailing, spacing: 5) {
-                        Text("\(secondaryNumeral)")
-                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                    // Right Side: Score and Ordnance (15pt medium)
+                    HStack(spacing: 5) {
+                        Text("Score")
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
                             .foregroundStyle(theme.textSecondary)
 
-                        // Ordnance Glass Beads along inner edge
+                        Text("\(secondaryNumeral)")
+                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                            .foregroundStyle(theme.text)
+                    }
+                    .hudLegibilityShadow()
+
+                    HStack(spacing: 5) {
+                        Text("Ord")
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .foregroundStyle(theme.textSecondary)
+
+                        Text("\(ammo)/\(maxAmmo)")
+                            .font(.system(size: 15, weight: .medium, design: .rounded))
+                            .foregroundStyle(theme.textSecondary)
+
                         HStack(spacing: 3) {
                             ForEach(0..<maxAmmo, id: \.self) { idx in
                                 Circle()
-                                    .fill(idx < ammo ? (ammo <= 2 ? theme.warning : theme.accent) : Color.white.opacity(0.12))
-                                    .frame(width: 4, height: 4)
-                                    .overlay(
-                                        Circle()
-                                            .stroke(Color.white.opacity(0.3), lineWidth: 0.5)
-                                    )
+                                    .fill(idx < ammo ? (ammo <= 2 ? theme.warning : theme.accent) : Color.white.opacity(0.20))
+                                    .frame(width: 5, height: 5)
                             }
                         }
                     }
+                    .hudLegibilityShadow()
                 }
             }
-            .padding(.horizontal, isRight ? 18 : 16)
+            .frame(width: 170, alignment: isRight ? .trailing : .leading)
+            .position(
+                x: isRight ? (spineX - 44 - 85) : (spineX + 44 + 85),
+                y: readoutCenterY
+            )
         }
-        .frame(width: 120, height: h)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .allowsHitTesting(false)
     }
 }
 
-// MARK: - Arc Track Geometry Shape
+// MARK: - Full-Height Arc Rail Shape
 
-struct ArcTrackShape: Shape {
-    let isMirrored: Bool
-    let hasIslandCutout: Bool
+struct FullHeightArcShape: Shape {
+    let isRight: Bool
+    let spineX: CGFloat
+    let topY: CGFloat
+    let bottomY: CGFloat
 
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        let w = rect.width
-        let h = rect.height
-        let cornerR: CGFloat = 48.0
-
-        if !isMirrored {
-            // Left Arc: Starts top-right, curves down along left edge, curves back right at bottom
-            let topX = w - 12
-            let botX = w - 12
-            let spineX: CGFloat = hasIslandCutout ? 38 : 18
-
-            path.move(to: CGPoint(x: topX, y: 12))
-            path.addQuadCurve(to: CGPoint(x: spineX, y: cornerR + 10), control: CGPoint(x: spineX + 8, y: 12))
-            path.addLine(to: CGPoint(x: spineX, y: h - cornerR - 10))
-            path.addQuadCurve(to: CGPoint(x: botX, y: h - 12), control: CGPoint(x: spineX + 8, y: h - 12))
-        } else {
-            // Right Arc: Mirrored
-            let topX: CGFloat = 12
-            let botX: CGFloat = 12
-            let spineX: CGFloat = w - (hasIslandCutout ? 38 : 18)
-
-            path.move(to: CGPoint(x: topX, y: 12))
-            path.addQuadCurve(to: CGPoint(x: spineX, y: cornerR + 10), control: CGPoint(x: spineX - 8, y: 12))
-            path.addLine(to: CGPoint(x: spineX, y: h - cornerR - 10))
-            path.addQuadCurve(to: CGPoint(x: botX, y: h - 12), control: CGPoint(x: spineX - 8, y: h - 12))
-        }
-
+        path.move(to: CGPoint(x: spineX, y: bottomY))
+        path.addLine(to: CGPoint(x: spineX, y: topY))
         return path
     }
 }
 
-// MARK: - Fine Etched Ticks Overlay
+// MARK: - Full-Height Arc Needle (3pt Stroke with Round Cap)
 
-struct ArcTicksOverlay: View {
-    let isMirrored: Bool
-    let hasIslandCutout: Bool
-    let theme: HUDTheme
+struct FullHeightArcNeedle: View {
+    let isRight: Bool
+    let spineX: CGFloat
+    let topY: CGFloat
+    let bottomY: CGFloat
+    let progress: Double
+    let needleColor: Color
 
     var body: some View {
-        GeometryReader { geo in
-            let h = geo.size.height
-            let w = geo.size.width
-            let tickCount = 11
+        let span = bottomY - topY
+        let currentY = bottomY - CGFloat(progress) * span
+        let needleLen: CGFloat = 13.0
 
-            ZStack {
-                ForEach(0..<tickCount, id: \.self) { i in
-                    let fraction = CGFloat(i) / CGFloat(tickCount - 1)
-                    let y = 18 + fraction * (h - 36)
-                    let isMajor = (i % 2 == 0)
-
-                    Rectangle()
-                        .fill(isMajor ? Color.white.opacity(0.40) : Color.white.opacity(0.18))
-                        .frame(width: isMajor ? 7 : 4, height: 0.75)
-                        .position(
-                            x: isMirrored ? (w - (hasIslandCutout ? 20 : 6)) : (hasIslandCutout ? 20 : 6),
-                            y: y
-                        )
-                }
-            }
+        Path { path in
+            let xStart = spineX - needleLen / 2
+            let xEnd = spineX + needleLen / 2
+            path.move(to: CGPoint(x: xStart, y: currentY))
+            path.addLine(to: CGPoint(x: xEnd, y: currentY))
         }
+        .stroke(needleColor, style: StrokeStyle(lineWidth: 3.0, lineCap: .round))
+        .shadow(color: needleColor.opacity(0.95), radius: 4)
     }
 }
 
-// MARK: - 2. Windshield Curved Heading Scale (Top Edge)
+// MARK: - Full-Height Arc Ticks & 13pt Semibold Numerals (Pointing Inward)
+
+struct FullHeightArcTicks: View {
+    let type: FullHeightArcGauge.GaugeType
+    let isRight: Bool
+    let spineX: CGFloat
+    let topY: CGFloat
+    let bottomY: CGFloat
+    let theme: HUDTheme
+
+    var body: some View {
+        let majorSteps = 5
+        let numerals: [Int] = (type == .altitude)
+            ? [0, 100, 200, 300, 400]
+            : [0, 25, 50, 75, 100]
+
+        ZStack {
+            // Minor Ticks (1.5pt stroke) pointing inward toward screen center
+            ForEach(0..<17, id: \.self) { i in
+                if i % 4 != 0 {
+                    let fraction = CGFloat(i) / 16.0
+                    let y = bottomY - fraction * (bottomY - topY)
+
+                    Path { p in
+                        let tickLen: CGFloat = 5.0
+                        let x1 = isRight ? (spineX - tickLen) : (spineX + tickLen)
+                        p.move(to: CGPoint(x: spineX, y: y))
+                        p.addLine(to: CGPoint(x: x1, y: y))
+                    }
+                    .stroke(Color.white.opacity(0.35), lineWidth: 1.5)
+                }
+            }
+
+            // Major Ticks (2.5pt stroke) with 13pt Semibold Numerals pointing inward
+            ForEach(0..<majorSteps, id: \.self) { i in
+                let fraction = CGFloat(i) / CGFloat(majorSteps - 1)
+                let y = bottomY - fraction * (bottomY - topY)
+
+                Path { p in
+                    let tickLen: CGFloat = 8.0
+                    let x1 = isRight ? (spineX - tickLen) : (spineX + tickLen)
+                    p.move(to: CGPoint(x: spineX, y: y))
+                    p.addLine(to: CGPoint(x: x1, y: y))
+                }
+                .stroke(Color.white.opacity(0.75), lineWidth: 2.5)
+
+                let num = numerals[i]
+                let numX = isRight ? (spineX - 22) : (spineX + 22)
+
+                Text("\(num)")
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(theme.textSecondary)
+                    .hudLegibilityShadow()
+                    .position(x: numX, y: y)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - 3. Windshield Curved Heading Scale (Top Edge)
 
 struct HeadingScale: View {
     let headingDeg: Float
@@ -614,40 +717,40 @@ struct HeadingScale: View {
     var body: some View {
         let currentHeading = Int(headingDeg) % 360
 
-        VStack(spacing: 2) {
-            // Subtle Hairline Pointer
-            Rectangle()
-                .fill(theme.accent)
-                .frame(width: 1, height: 6)
-
-            // Current Heading Large Calm Numeral
+        VStack(spacing: 3) {
+            // Dominant Heading Numeral (18pt semibold)
             Text(headingText(currentHeading))
-                .font(.system(size: 13, weight: .regular, design: .rounded))
+                .font(.system(size: 18, weight: .semibold, design: .rounded))
                 .foregroundStyle(theme.text)
+                .hudLegibilityShadow()
                 .contentTransition(.numericText())
 
-            // Hairline Etched Degree Scale on Glass
-            HStack(spacing: 12) {
-                ForEach(-4...4, id: \.self) { offset in
-                    let mark = (currentHeading + offset * 10 + 360) % 360
-                    let isMajor = (mark % 30 == 0)
+            // Center Boresight Hairline Pointer (2.5pt width)
+            Rectangle()
+                .fill(theme.accent)
+                .frame(width: 2.5, height: 7)
+
+            // Hairline Scale with degree numbers every 15° (13pt semibold)
+            HStack(spacing: 16) {
+                ForEach(-3...3, id: \.self) { offset in
+                    let markDeg = (currentHeading + offset * 15 + 360) % 360
+                    let isCenter = (offset == 0)
 
                     VStack(spacing: 2) {
                         Rectangle()
-                            .fill(offset == 0 ? theme.accent : Color.white.opacity(isMajor ? 0.35 : 0.15))
-                            .frame(width: 0.75, height: isMajor ? 6 : 3.5)
+                            .fill(isCenter ? theme.accent : Color.white.opacity(0.50))
+                            .frame(width: isCenter ? 2.5 : 1.5, height: 7)
 
-                        if isMajor {
-                            Text(cardinalOrDegrees(mark))
-                                .font(.system(size: 8, weight: .regular, design: .rounded))
-                                .foregroundStyle(theme.textSecondary)
-                        }
+                        Text(cardinalOrDegrees(markDeg))
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .foregroundStyle(isCenter ? theme.accent : theme.textSecondary)
+                            .hudLegibilityShadow()
                     }
-                    .frame(width: 22)
+                    .frame(width: 32)
                 }
             }
         }
-        .frame(maxWidth: min(380, viewWidth * 0.45))
+        .frame(maxWidth: min(390, viewWidth * 0.46))
         .allowsHitTesting(false)
     }
 
@@ -669,7 +772,7 @@ struct HeadingScale: View {
     }
 }
 
-// MARK: - 3. Minimalist Center Reticle with Acquiring Ring
+// MARK: - 4. Minimalist Volvo Reticle (2.5pt Strokes, 58pt Diameter)
 
 struct VolvoReticleView: View {
     let isLocked: Bool
@@ -681,38 +784,39 @@ struct VolvoReticleView: View {
 
     var body: some View {
         ZStack {
-            // Outer Smooth Target Acquiring Progress Ring (Draws smoothly around reticle)
+            // Outer Smooth Target Acquiring Progress Ring (2.5pt stroke, 58pt diameter: +25%)
             Circle()
                 .trim(from: 0.0, to: CGFloat(min(max(lockProgress, 0.0), 1.0)))
                 .stroke(
-                    isLocked ? theme.accent : theme.accent.opacity(0.45),
-                    style: StrokeStyle(lineWidth: isLocked ? 1.5 : 1.0, lineCap: .round)
+                    isLocked ? theme.accent : theme.accent.opacity(0.50),
+                    style: StrokeStyle(lineWidth: 2.5, lineCap: .round)
                 )
-                .frame(width: 44, height: 44)
+                .frame(width: 58, height: 58)
                 .rotationEffect(.degrees(-90))
                 .animation(.easeOut(duration: 0.12), value: lockProgress)
                 .scaleEffect(isLocked ? 1.06 : 1.0)
-                .shadow(color: isLocked ? theme.accent.opacity(0.65) : .clear, radius: 8)
+                .shadow(color: isLocked ? theme.accent.opacity(0.70) : .clear, radius: 8)
 
-            // Inner Fine Crosshair Dot
+            // Inner Fine Crosshair Dot (3.5pt)
             Circle()
-                .fill(isLocked ? theme.accent : Color.white.opacity(0.85))
-                .frame(width: 3, height: 3)
+                .fill(isLocked ? theme.accent : Color.white.opacity(0.90))
+                .frame(width: 3.5, height: 3.5)
+                .hudLegibilityShadow()
 
-            // Four Delicate Hairline Ticks (12, 3, 6, 9 o'clock)
+            // Four Hairline Ticks (2.5pt stroke)
             ForEach([0, 90, 180, 270], id: \.self) { deg in
                 Rectangle()
-                    .fill(Color.white.opacity(isLocked ? 0.8 : 0.4))
-                    .frame(width: 0.75, height: 4)
-                    .offset(y: -14)
+                    .fill(Color.white.opacity(isLocked ? 0.90 : 0.50))
+                    .frame(width: 1.5, height: 6)
+                    .offset(y: -19)
                     .rotationEffect(.degrees(Double(deg)))
+                    .hudLegibilityShadow()
             }
 
-            // Target Neutralized Transient Sparkle (Minimal, no huge red boxes)
             if isStriking {
                 Circle()
-                    .stroke(theme.accent, lineWidth: 1.5)
-                    .frame(width: 56, height: 56)
+                    .stroke(theme.accent, lineWidth: 2.0)
+                    .frame(width: 72, height: 72)
                     .scaleEffect(1.2)
                     .opacity(0.85)
                     .transition(.scale.combined(with: .opacity))
@@ -724,36 +828,88 @@ struct VolvoReticleView: View {
     }
 }
 
-// MARK: - 4. Sculpted Bottom-Corner Glass Keys (Scan & Tag)
+// MARK: - 5. Zoom Reticle Glass Chip (Directly Below Reticle)
 
-struct CornerGlassKey: View {
-    enum KeyRole {
-        case scan
-        case boost
-        case zoom
-        case photo
-        case tag
+struct ZoomReticleChip: View {
+    let zoomFactor: Float
+    let theme: HUDTheme
+    let action: () -> Void
+
+    var body: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            action()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "plus.magnifyingglass")
+                    .font(.system(size: 10, weight: .semibold))
+                Text(String(format: "%.0fX", zoomFactor))
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+            }
+            .foregroundStyle(zoomFactor > 1.0 ? theme.accent : theme.text)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4.5)
+            .background(.ultraThinMaterial, in: Capsule())
+            .overlay(Capsule().stroke(Color.white.opacity(0.20), lineWidth: 0.75))
+            .shadow(color: Color.black.opacity(0.35), radius: 5)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Dedicated Non-Clipping Trigger Badge
+
+struct TriggerBadge: View {
+    let text: String?
+    let systemImage: String?
+    let theme: HUDTheme
+
+    var body: some View {
+        HStack(spacing: 0) {
+            if let systemImage = systemImage {
+                Image(systemName: systemImage)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(theme.textSecondary.opacity(0.90))
+            } else if let text = text {
+                Text(text)
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundStyle(theme.textSecondary.opacity(0.90))
+                    .lineLimit(1)
+            }
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2.5)
+        .overlay(
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .stroke(Color.white.opacity(0.25), lineWidth: 0.75)
+        )
+        .fixedSize()
+    }
+}
+
+// MARK: - 6. Corner Quarter Main Keys (Scan L2 & Tag R2: 17pt Semibold, Width 156)
+
+struct CornerQuarterMainKey: View {
+    enum CornerRole {
+        case bottomLeading
+        case bottomTrailing
     }
 
-    let role: KeyRole
-    let triggerHint: String
+    let corner: CornerRole
+    let label: String
+    let hint: String
+    let iconName: String
     let isSelected: Bool
-    let zoomFactor: Float
     let theme: HUDTheme
     let action: () -> Void
 
     @State private var isTouchDepressed: Bool = false
 
     private var isPhysicalTriggerPulled: Bool {
-        switch role {
-        case .scan:
+        if corner == .bottomLeading {
             return GameInput.shared.isL2Pressed
-        case .tag:
+        } else {
             return GameInput.shared.isR2Pressed
-        case .boost:
-            return GameInput.shared.isL1Pressed
-        case .zoom, .photo:
-            return false
         }
     }
 
@@ -761,13 +917,16 @@ struct CornerGlassKey: View {
         isTouchDepressed || isPhysicalTriggerPulled
     }
 
-    private var keyWidth: CGFloat {
-        switch role {
-        case .scan, .tag: return 102
-        case .boost: return 84
-        case .zoom: return 72
-        case .photo: return 78
-        }
+    private var strokeGradient: LinearGradient {
+        LinearGradient(
+            stops: [
+                .init(color: Color.white.opacity(isDepressed ? 0.35 : 0.65), location: 0.0),
+                .init(color: Color.white.opacity(0.18), location: 0.40),
+                .init(color: Color.white.opacity(0.06), location: 1.0)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
     }
 
     var body: some View {
@@ -775,77 +934,44 @@ struct CornerGlassKey: View {
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             action()
         } label: {
-            HStack(spacing: 5) {
-                switch role {
-                case .scan:
-                    Image(systemName: "viewfinder")
-                        .font(.system(size: 11, weight: .light))
-                        .foregroundStyle(isSelected ? theme.accent : theme.textSecondary)
-                    Text("Scan")
-                        .font(.system(size: 12, weight: isSelected ? .medium : .regular, design: .default))
-                        .foregroundStyle(theme.text)
-                        .lineLimit(1).fixedSize()
-
-                case .boost:
-                    Image(systemName: "bolt.fill")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(isSelected ? theme.accent : theme.textSecondary)
-                    Text("Boost")
-                        .font(.system(size: 12, weight: isSelected ? .medium : .regular, design: .default))
-                        .foregroundStyle(theme.text)
-                        .lineLimit(1).fixedSize()
-
-                case .zoom:
-                    Image(systemName: "plus.magnifyingglass")
-                        .font(.system(size: 10, weight: .regular))
-                        .foregroundStyle(isSelected ? theme.accent : theme.textSecondary)
-                    Text(String(format: "%.0fX", zoomFactor))
-                        .font(.system(size: 12, weight: isSelected ? .semibold : .regular, design: .default))
-                        .foregroundStyle(theme.text)
-                        .lineLimit(1).fixedSize()
-
-                case .photo:
-                    Image(systemName: "camera.fill")
-                        .font(.system(size: 10, weight: .regular))
-                        .foregroundStyle(theme.accent)
-                    Text("Photo")
-                        .font(.system(size: 12, weight: .regular, design: .default))
-                        .foregroundStyle(theme.text)
-                        .lineLimit(1).fixedSize()
-
-                case .tag:
-                    Image(systemName: "target")
-                        .font(.system(size: 11, weight: .light))
-                        .foregroundStyle(isSelected ? theme.accent : theme.textSecondary)
-                    Text("Tag")
-                        .font(.system(size: 12, weight: isSelected ? .medium : .regular, design: .default))
-                        .foregroundStyle(theme.text)
-                        .lineLimit(1).fixedSize()
+            HStack(spacing: 8) {
+                if corner == .bottomTrailing {
+                    TriggerBadge(text: hint, systemImage: nil, theme: theme)
+                    Spacer(minLength: 4)
                 }
 
-                Spacer(minLength: 2)
+                Image(systemName: iconName)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(isSelected ? theme.accent : theme.textSecondary)
 
-                // Etched Trigger Hint in Glass
-                Text(triggerHint)
-                    .font(.system(size: 8.5, weight: .regular, design: .monospaced))
-                    .foregroundStyle(theme.textSecondary.opacity(0.65))
-                    .padding(.horizontal, 3.5)
-                    .padding(.vertical, 1)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 3)
-                            .stroke(Color.white.opacity(0.18), lineWidth: 0.5)
-                    )
+                // Main Key Label (17pt semibold)
+                Text(label)
+                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .foregroundStyle(theme.text)
+                    .hudLegibilityShadow()
+                    .lineLimit(1)
+                    .fixedSize()
 
-                if role == .tag {
-                    Circle()
-                        .fill(isSelected ? theme.accent : Color.white.opacity(0.20))
-                        .frame(width: 4.5, height: 4.5)
+                if corner == .bottomLeading {
+                    Spacer(minLength: 4)
+                    TriggerBadge(text: hint, systemImage: nil, theme: theme)
                 }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 7)
-            .frame(width: keyWidth, height: 36)
-            .windshieldGlass(cornerRadius: 16, isDepressed: isDepressed)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .frame(width: 156, height: 48) // Guaranteed comfortable width, 48pt touch target
+            .background {
+                QuarterSegmentShape(corner: corner)
+                    .fill(.ultraThinMaterial)
+            }
+            .overlay {
+                QuarterSegmentShape(corner: corner)
+                    .fill(Color.white.opacity(isDepressed ? 0.03 : 0.08))
+            }
+            .overlay {
+                QuarterSegmentShape(corner: corner)
+                    .stroke(strokeGradient, lineWidth: 1.0)
+            }
             .scaleEffect(isDepressed ? 0.96 : 1.0)
             .animation(.spring(response: 0.22, dampingFraction: 0.7), value: isDepressed)
         }
@@ -858,64 +984,95 @@ struct CornerGlassKey: View {
     }
 }
 
-// MARK: - 5. Dynamic Island Hardware Integration & Spring Alerts
+// MARK: - Stacked Shelf Button (Boost L1 & Photo △: Width 136)
 
-struct DynamicIslandHUD: View {
-    let isIslandOnLeft: Bool
-    let isSynced: Bool
-    let activeAlert: IslandAlert?
+struct StackedShelfButton: View {
+    let iconName: String
+    let label: String
+    let hint: String?
+    let hintSystemImage: String?
+    let isSelected: Bool
     let theme: HUDTheme
-    let viewWidth: CGFloat
-    let viewHeight: CGFloat
+    let action: () -> Void
+
+    @State private var isTouchDepressed: Bool = false
 
     var body: some View {
-        ZStack(alignment: isIslandOnLeft ? .leading : .trailing) {
-            // Hardware-matching Island Pill & Software Growth Capsule
-            HStack(spacing: 7) {
-                if let alert = activeAlert {
-                    // Expanding Spring Alert Badge
-                    Image(systemName: alert.icon)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(alert.isWarning ? theme.warning : theme.accent)
+        Button {
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            action()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: iconName)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(isSelected ? theme.accent : theme.textSecondary)
 
-                    Text(alert.text)
-                        .font(.system(size: 11, weight: .medium, design: .default))
-                        .foregroundStyle(theme.text)
-                        .lineLimit(1)
-                } else {
-                    // Resting Sync State
-                    Circle()
-                        .fill(isSynced ? Color.green : theme.warning)
-                        .frame(width: 5, height: 5)
+                Text(label)
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundStyle(theme.text)
+                    .hudLegibilityShadow()
+                    .lineLimit(1)
+                    .fixedSize()
 
-                    Text(isSynced ? "Synced" : "Searching…")
-                        .font(.system(size: 10, weight: .regular, design: .default))
-                        .foregroundStyle(theme.textSecondary)
-                        .lineLimit(1)
-                }
+                Spacer(minLength: 4)
+
+                TriggerBadge(text: hint, systemImage: hintSystemImage, theme: theme)
             }
-            .padding(.horizontal, 11)
-            .padding(.vertical, 6)
-            .background {
-                Capsule()
-                    .fill(Color.black.opacity(0.92))
-                    .overlay(
-                        Capsule()
-                            .stroke(Color.white.opacity(0.12), lineWidth: 0.5)
-                    )
-            }
-            .shadow(color: Color.black.opacity(0.3), radius: 6)
-            .animation(.spring(response: 0.35, dampingFraction: 0.75), value: activeAlert)
-            .position(
-                x: isIslandOnLeft ? 52 : (viewWidth - 52),
-                y: viewHeight / 2
-            )
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .frame(width: 136, height: 38)
+            .windshieldGlass(cornerRadius: 12, isDepressed: isTouchDepressed)
+            .scaleEffect(isTouchDepressed ? 0.95 : 1.0)
+            .animation(.spring(response: 0.22, dampingFraction: 0.7), value: isTouchDepressed)
         }
-        .allowsHitTesting(false)
+        .buttonStyle(.plain)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isTouchDepressed = true }
+                .onEnded { _ in isTouchDepressed = false }
+        )
     }
 }
 
-// MARK: - 6. Perimeter Off-Screen Target Chevrons (Radar Replacement)
+// MARK: - Quarter-Segment Screen Corner Conforming Shape
+
+struct QuarterSegmentShape: Shape {
+    let corner: CornerQuarterMainKey.CornerRole
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let w = rect.width
+        let h = rect.height
+        let cornerR: CGFloat = 28.0
+
+        if corner == .bottomLeading {
+            path.move(to: CGPoint(x: 0, y: 10))
+            path.addQuadCurve(to: CGPoint(x: 10, y: 0), control: CGPoint(x: 0, y: 0))
+            path.addLine(to: CGPoint(x: w - 8, y: 0))
+            path.addQuadCurve(to: CGPoint(x: w, y: 8), control: CGPoint(x: w, y: 0))
+            path.addLine(to: CGPoint(x: w, y: h - 8))
+            path.addQuadCurve(to: CGPoint(x: w - 8, y: h), control: CGPoint(x: w, y: h))
+            path.addLine(to: CGPoint(x: cornerR, y: h))
+            path.addQuadCurve(to: CGPoint(x: 0, y: h - cornerR), control: CGPoint(x: 0, y: h))
+            path.closeSubpath()
+        } else {
+            path.move(to: CGPoint(x: 8, y: 0))
+            path.addLine(to: CGPoint(x: w - 10, y: 0))
+            path.addQuadCurve(to: CGPoint(x: w, y: 10), control: CGPoint(x: w, y: 0))
+            path.addLine(to: CGPoint(x: w, y: h - cornerR))
+            path.addQuadCurve(to: CGPoint(x: w - cornerR, y: h), control: CGPoint(x: w, y: h))
+            path.addLine(to: CGPoint(x: 8, y: h))
+            path.addQuadCurve(to: CGPoint(x: 0, y: h - 8), control: CGPoint(x: 0, y: h))
+            path.addLine(to: CGPoint(x: 0, y: 8))
+            path.addQuadCurve(to: CGPoint(x: 8, y: 0), control: CGPoint(x: 0, y: 0))
+            path.closeSubpath()
+        }
+
+        return path
+    }
+}
+
+// MARK: - Perimeter Off-Screen Target Chevrons
 
 struct EdgeTargetChevrons: View {
     let threats: [GameState.RadarThreat]
@@ -929,18 +1086,17 @@ struct EdgeTargetChevrons: View {
 
         ZStack {
             ForEach(threats) { threat in
-                // Only show chevrons for targets outside forward boresight
                 if abs(threat.azimuthRad) > 0.40 || threat.distanceNorm > 0.65 {
                     let angle = Double(threat.azimuthRad) - .pi / 2
                     let pt = edgeIntersection(angle: angle, width: w, height: h, inset: inset)
                     let chevronColor = threat.isProjectile ? theme.warning : (threat.isTagged ? Color.green.opacity(0.6) : theme.accent)
 
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(chevronColor)
                         .rotationEffect(.radians(angle))
                         .position(pt)
-                        .shadow(color: chevronColor.opacity(0.5), radius: 4)
+                        .shadow(color: chevronColor.opacity(0.6), radius: 5)
                 }
             }
         }
@@ -966,24 +1122,14 @@ struct EdgeTargetChevrons: View {
 
 // MARK: - SwiftUI Previews
 
-#Preview("Volvo Windshield HUD - Ice (Default)") {
+#Preview("Volvo Windshield HUD - Ice", traits: .landscapeLeft) {
     HUDView(settings: PlacementSettings())
-        .previewInterfaceOrientation(.landscapeLeft)
         .background(Color(red: 0.10, green: 0.12, blue: 0.14))
 }
 
-#Preview("Volvo Windshield HUD - Bloom (Candy)") {
+#Preview("Volvo Windshield HUD - Bloom", traits: .landscapeLeft) {
     let gs = GameState.shared
     gs.hudThemePreset = .bloom
     return HUDView(settings: PlacementSettings())
-        .previewInterfaceOrientation(.landscapeLeft)
         .background(Color(red: 0.10, green: 0.12, blue: 0.14))
-}
-
-#Preview("Volvo Windshield HUD - Prestige 3 (Thermal)") {
-    let gs = GameState.shared
-    gs.prestigeLevel = 3
-    return HUDView(settings: PlacementSettings())
-        .previewInterfaceOrientation(.landscapeLeft)
-        .background(Color(red: 0.05, green: 0.05, blue: 0.05))
 }

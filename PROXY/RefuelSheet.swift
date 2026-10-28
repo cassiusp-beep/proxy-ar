@@ -51,7 +51,8 @@ struct RefuelSheet: View {
                                 gameState.gems -= 20
                             }
                             gameState.fuel = 100
-                            gameState.radioMessage = "OPERATOR: Fast recharge complete. Drone cleared for flight."
+                            gameState.droneShield = 100
+                            gameState.radioMessage = "Operator: Fast recharge complete. Drone cleared for flight."
                         } label: {
                             HStack {
                                 Text("💎")
@@ -70,7 +71,8 @@ struct RefuelSheet: View {
                             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
                                 isWatchingAd = false
                                 gameState.fuel = 100
-                                gameState.radioMessage = "OPERATOR: Field sponsorship acknowledged. Battery 100%."
+                                gameState.droneShield = 100
+                                gameState.radioMessage = "Operator: Field sponsorship acknowledged. Battery 100%."
                             }
                         } label: {
                             HStack {
