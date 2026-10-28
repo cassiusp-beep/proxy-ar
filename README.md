@@ -2,7 +2,23 @@
 
 The AR app for PROXY (DESINV 210, critical design). Through the phone, the gray terrain on the PROXY Field Unit (or the diorama/trophy print) becomes a bright cartoon city. The full project context is in [PROXY_AR_BRIEF.md](PROXY_AR_BRIEF.md). This build is **Phase 1: alignment**: lock the city onto the physical model to about 1–2 mm from any viewpoint.
 
-Why things are the way they are: [DECISIONS.md](DECISIONS.md). Debugging alignment: [docs/AR_ALIGNMENT_PLAYBOOK.md](docs/AR_ALIGNMENT_PLAYBOOK.md).
+Why things are the way they are: [DECISIONS.md](DECISIONS.md). Debugging alignment: [docs/AR_ALIGNMENT_PLAYBOOK.md](docs/AR_ALIGNMENT_PLAYBOOK.md). Design verification: [UI_REVIEW.md](UI_REVIEW.md).
+
+## Live Gameplay & AR HUD
+
+Captured on physical iPhone 17 Pro Max in landscape with the Backbone One PlayStation® Edition controller:
+
+### 1. Target Acquisition & Tactical Lock
+![Target Acquisition & Tactical Lock](docs/images/hero_target_lock.jpg)
+*Real-time HUD featuring Volvo-inspired curved windshield instrumentation: 2.5pt stroke reticle with 360° lock progress, symmetric full-height altitude (`164 mm`) and fuel (`82%`) arc gauges, dynamic heading scale (`271° W`), and center-bottom `Synced` status button.*
+
+### 2. Tactical Flank & Hostile Retaliation
+![Hostile Retaliation & Damage Feedback](docs/images/hero_combat_retaliation.jpg)
+*Live ant swarm counter-fire engagement: subtle perimeter warning vignette at screen edges, off-screen target threat chevrons on the top bezel, and dynamic `"Shield at 20%"` tactical alert banner.*
+
+### 3. Sector Sterilization & Neutralization
+![Sector Neutralized](docs/images/hero_sector_neutralized.jpg)
+*Complete sector clearance: mission fanfare, tactical OP-COM radio transmission, 8-round ordnance tracking, and score telemetry (`3,350 pts`).*
 
 ## Files
 
@@ -10,6 +26,8 @@ Why things are the way they are: [DECISIONS.md](DECISIONS.md). Debugging alignme
 |---|---|
 | `PROXY/PROXYApp.swift` | App entry. |
 | `PROXY/ContentView.swift` | AR view, status pill, debug panel overlay (landscape). |
+| `PROXY/HUDView.swift` | Volvo-inspired curved windshield HUD overlay: symmetric full-height arc gauges, minimal reticle, center-bottom synced button, corner action triggers. |
+| `PROXY/GameState.swift` | Observable game state driving telemetry, shields, ammo, and toasts. |
 | `PROXY/ARViewContainer.swift` | ARKit session (LiDAR mesh, hand segmentation), marker sampling, Sync and Re-lock, fidelity scan wiring, three-finger tap. |
 | `PROXY/MarkerLock.swift` | The lock: one or two markers, duplicate guard, leveling (height from the markers), world anchor, lock logging. |
 | `PROXY/MarkerSampler.swift` | Averages each marker's pose over 30 detections (inlier median position, circular-mean heading) before locking. |
