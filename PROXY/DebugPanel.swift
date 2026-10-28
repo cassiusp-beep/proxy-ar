@@ -53,6 +53,29 @@ struct DebugPanel: View {
                             }
                             .buttonStyle(.bordered)
                         }
+
+                        // Volvo HUD Theme Preset Picker
+                        Picker("HUD Theme", selection: Binding(
+                            get: { GameState.shared.hudThemePreset },
+                            set: { GameState.shared.hudThemePreset = $0 }
+                        )) {
+                            ForEach(HUDThemePreset.allCases) { preset in
+                                Text(preset.rawValue).tag(preset)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+
+                        // Screen Corner Radius Slider
+                        row("Corner R", value: String(format: "%.0f pt", GameState.shared.cornerRadiusSetting)) {
+                            Slider(
+                                value: Binding(
+                                    get: { Double(GameState.shared.cornerRadiusSetting) },
+                                    set: { GameState.shared.cornerRadiusSetting = CGFloat($0) }
+                                ),
+                                in: 40...65,
+                                step: 1
+                            )
+                        }
                     }
                     .padding(8)
                     .background(Color.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 10))

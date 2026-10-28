@@ -14,6 +14,10 @@ final class GameState {
     var maxFuel: Float = 100.0
     var isFuelEmpty: Bool { fuel <= 0 }
 
+    // MARK: - Volvo Windshield HUD Settings
+    var hudThemePreset: HUDThemePreset = .ice
+    var cornerRadiusSetting: CGFloat = 55.0
+
     // MARK: - Zoom State
     var zoomFactor: Float = 1.0          // 1.0X, 2.0X, 4.0X
 

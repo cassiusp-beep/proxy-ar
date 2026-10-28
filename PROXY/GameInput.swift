@@ -22,6 +22,10 @@ final class GameInput {
     /// Tag button pressed (A on controller or on-screen button).
     var tagTriggered: Bool = false
 
+    /// Hardware trigger states for glass key depression animation
+    var isL2Pressed: Bool = false
+    var isR2Pressed: Bool = false
+
     /// Tool cycle request (-1 previous, +1 next).
     var toolCycleDelta: Int = 0
 
@@ -141,6 +145,7 @@ final class GameInput {
 
         // L2 Trigger [L2]: Trigger Scan tool
         gamepad.leftTrigger.pressedChangedHandler = { [weak self] _, _, pressed in
+            self?.isL2Pressed = pressed
             if pressed {
                 guard !GameState.shared.isConnectionLost else { return }
                 SessionLogger.shared.log("Controller L2 / Left Trigger pressed: select scan tool", category: "INPUT")
@@ -152,6 +157,7 @@ final class GameInput {
 
         // R2 Trigger [R2]: Primary Weapon Trigger / Shoot (pull finger to fire & flash)
         gamepad.rightTrigger.pressedChangedHandler = { [weak self] _, _, pressed in
+            self?.isR2Pressed = pressed
             if pressed {
                 guard !GameState.shared.isConnectionLost else { return }
                 SessionLogger.shared.log("Controller R2 / Right Trigger pressed: TAG/STRIKE triggered", category: "INPUT")

@@ -815,3 +815,41 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun devicectl device 
 **Familiar or new:** new. Maximizes the iPhone 17 Pro Max's ultra-wide canvas, eliminating clutter in the diorama center while putting flight instruments on the left wing and combat controls under the operator's thumbs.
 
 
+## 046 · Scandinavian Volvo Instrument Cluster HUD Redesign
+**Date:** 2026-10-27
+
+**Context:**
+The previous HUD suffered from sci-fi clichés: boxed cards, bordered panels, pills-as-containers, neon glowing borders, monospace hacker typography, all-caps acronym noise (`FLIR 01`, `SIG -42dBm`), and a red warning box blocking the screen center. The user directed a complete visual rewrite modeled after a Scandinavian Volvo digital instrument cluster (XC90/EX90), treating the phone screen as a curved windshield with skeuomorphic liquid frosted glass, physical screen-edge concentric arcs, and calm, premium typography.
+
+**Key Changes:**
+1. **Curved Windshield Architecture & Liquid Glass:**
+   - Eradicated all floating rectangular boxed cards and neon borders.
+   - Built `windshieldGlass` ViewModifier using `.ultraThinMaterial` with top specular highlight border gradient (`0.65 -> 0.18 -> 0.06`) and soft ambient shadows.
+   - Designed all edge elements to follow the iPhone 17 Pro Max's physical corner radius (~55pt) inset ~12pt.
+2. **Left Altitude Arc Gauge & Dynamic Island Integration:**
+   - 140° sweeping frosted glass arc track with luminous gradient fill and etched 25mm tick marks.
+   - Added a razor-sharp luminous white LED needle index marker (`StrokeStyle(lineWidth: 18, lineCap: .butt)`) that glides along the arc with value changes.
+   - On `landscapeLeft`, shifted the arc center to `x = 134pt`, perfectly clearing the Dynamic Island hardware while matching the 72pt visual negative space of the right bezel.
+   - Dynamic Island software capsule rests seamlessly at `x = 52pt` with `● Synced` and spring-animated transient alert expansion (`Shield 20%`, `Threat deflected`).
+3. **Right Fuel & Ordnance Arc Gauge:**
+   - Mirrored concentric arc showing battery fuel percentage in calm rounded numerals. Turns soft coral below 20%.
+   - Integrated companion score numeral and glass ordnance beads (`ammo / maxAmmo`) along the inner rim.
+4. **Top Curved Heading Scale & Brevity Comms:**
+   - Replaced heavy compass box with an etched hairline degree scale and calm heading text (`275° W`).
+   - Single-line mission radio comms softly positioned below heading tape in frosted glass capsule.
+5. **Center Reticle (No Text Boxes):**
+   - Pure minimalist reticle: delicate crosshair dot, four hairline edge ticks, and an outer progressive stroke circle that smoothly sweeps around from 0% to 100% during target lock acquisition.
+6. **Bottom Sculpted Glass Keys (`Scan L2` & `Tag R2`):**
+   - 114×38pt sculpted frosted glass buttons with etched controller hints (`L2`, `R2`).
+   - Physical depression animation reacting both to on-screen touches and physical controller trigger pulls (`isL2Pressed`, `isR2Pressed`).
+   - Text guarded with `.lineLimit(1).fixedSize()` preventing truncation.
+7. **Perimeter Target Chevrons:**
+   - Replaced 360° circular radar with perimeter edge chevrons that point toward off-screen targets along the display border.
+8. **Automotive Color Themes & Prestige:**
+   - `HUDTheme` presets: `Ice` (Volvo cool arctic blue), `Bloom` (candy pink), `Mint`, and `Ember`.
+   - Dynamic desaturation and cool thermal shift up through Prestige level 3.
+
+**Familiar or new:** new. Pure Scandinavian automotive instrument cluster aesthetic replacing generic sci-fi tropes.
+
+
+
